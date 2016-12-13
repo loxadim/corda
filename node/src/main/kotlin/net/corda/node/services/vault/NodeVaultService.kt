@@ -1,5 +1,7 @@
 package net.corda.node.services.vault
 
+import com.google.common.collect.Sets
+import kotlinx.support.jdk8.collections.getOrDefault
 import io.requery.TransactionIsolation
 import io.requery.kotlin.`in`
 import io.requery.kotlin.eq
@@ -54,6 +56,9 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
     val session = configuration.sessionForModel(Models.VAULT)
 
     private val mutex = ThreadBox(content = object {
+
+        // TODO: this should also be a persistent structure
+        val softLockedStates = mutableMapOf<UUID, Collection<StateRef>>()
 
         val _updatesPublisher = PublishSubject.create<Vault.Update>()
         val _rawUpdatesPublisher = PublishSubject.create<Vault.Update>()
@@ -220,10 +225,50 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
         }
     }
 
+    override fun softLockReserve(id: UUID, stateRefs: Set<StateRef>) {
+        if (stateRefs.isNotEmpty()) {
+            mutex.locked {
+                softLockedStates.getOrPut(key = id, defaultValue = { emptyList<StateRef>() })
+                softLockedStates.put(id, stateRefs)
+                if (softLockedStates.isNotEmpty())
+                    log.info("Reserving soft lock states for $id: $stateRefs")
+            }
+        }
+    }
+
+    override fun softLockRelease(id: UUID, stateRefs: Set<StateRef>?) {
+        mutex.locked {
+            softLockedStates[id]?.let {
+                stateRefs?.let {
+                    val states = softLockedStates[id]
+                    if (stateRefs.isNotEmpty()) {
+                        states?.let {
+                            log.info("Releasing ${stateRefs.count()} soft locked states for $id: $stateRefs")
+                            states.minus(stateRefs)
+                        }
+                    }
+                    else {
+                        states?.let {
+                            log.info("Releasing all soft locked states for $id: ${softLockedStates[id]}")
+                            softLockedStates.remove(id)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Generate a transaction that moves an amount of currency to the given pubkey.
+     *
+     * @param onlyFromParties if non-null, the asset states will be filtered to only include those issued by the set
+     *                        of given parties. This can be useful if the party you're trying to pay has expectations
+     *                        about which type of asset claims they are willing to accept.
+     */
     override fun generateSpend(tx: TransactionBuilder,
                                amount: Amount<Currency>,
                                to: CompositeKey,
-                               onlyFromParties: Set<AbstractParty>?): Pair<TransactionBuilder, List<CompositeKey>> {
+                               onlyFromParties: Set<AnonymousParty>?): Pair<TransactionBuilder, List<CompositeKey>> {
         // Discussion
         //
         // This code is analogous to the Wallet.send() set of methods in bitcoinj, and has the same general outline.
@@ -260,14 +305,39 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
         // highest total value
         acceptableCoins = acceptableCoins.filter { it.state.notary == tx.notary }
 
-        val (gathered, gatheredAmount) = gatherCoins(acceptableCoins, amount)
+        var gathered: List<StateAndRef<Cash.State>> = emptyList()
+        var gatheredAmount: Amount<Currency> = Amount(0, USD)
+        mutex.locked {
+            // exclude soft locked states reserved by others
+            val softLockStatesForRefs = statesForRefs(softLockedStates.flatMap { it.value })
+            val softLockStatesAndRefs = softLockStatesForRefs.map {
+                StateAndRef(it.value as TransactionState<Cash.State>, it.key)
+            }
+            softLockStatesAndRefs.forEach { log.info("Excluding soft lock states for ${tx.lockId}: ${it.ref}") }
+            acceptableCoins = acceptableCoins.minus(softLockStatesAndRefs)
+
+            // include soft locked states reserved by me
+            val mySoftLockedStates = softLockedStates.getOrDefault(tx.lockId, emptyList())
+            val mySoftLockStatesForRefs = statesForRefs(mySoftLockedStates.toList())
+            val mySoftLockStatesAndRefs = mySoftLockStatesForRefs.map {
+                StateAndRef(it.value as TransactionState<Cash.State>, it.key)
+            }
+            mySoftLockStatesAndRefs.forEach { log.info("Including soft lock states for ${tx.lockId}: ${it.ref}") }
+            acceptableCoins = acceptableCoins.plus(mySoftLockStatesAndRefs)
+
+            val gatheredCoins = gatherCoins(acceptableCoins, amount)
+            gathered = gatheredCoins.first
+            gatheredAmount = gatheredCoins.second
+            softLockReserve(tx.lockId, gathered.map { it.ref }.toSet())
+        }
+
         val takeChangeFrom = gathered.firstOrNull()
         val change = if (takeChangeFrom != null && gatheredAmount > amount) {
             Amount(gatheredAmount.quantity - amount.quantity, takeChangeFrom.state.data.amount.token)
         } else {
             null
         }
-        val keysUsed = gathered.map { it.state.data.owner }.toSet()
+        val keysUsed = gathered.map { it.state.data.owner }
 
         val states = gathered.groupBy { it.state.data.amount.token.issuer }.map {
             val coins = it.value
@@ -295,15 +365,14 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
         for (state in outputs) tx.addOutputState(state)
 
         // What if we already have a move command with the right keys? Filter it out here or in platform code?
-        val keysList = keysUsed.toList()
-        tx.addCommand(Cash().generateMoveCommand(), keysList)
+        tx.addCommand(Cash().generateMoveCommand(), keysUsed)
 
         // update Vault
         //        notify(tx.toWireTransaction())
         // Vault update must be completed AFTER transaction is recorded to ledger storage!!!
         // (this is accomplished within the recordTransaction function)
 
-        return Pair(tx, keysList)
+        return Pair(tx, keysUsed)
     }
 
     private fun deriveState(txState: TransactionState<Cash.State>, amount: Amount<Issued<Currency>>, owner: CompositeKey)
@@ -362,6 +431,7 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
             log.trace { "tx ${tx.id} was irrelevant to this vault, ignoring" }
             return Vault.NoUpdate
         }
+        softLockRelease(tx.lockId, consumedStates.map { it.ref }.toSet())
 
         return Vault.Update(consumedStates, ourNewStates.toHashSet())
     }

@@ -44,6 +44,7 @@ import net.corda.node.services.statemachine.StateMachineManager
 import net.corda.node.services.transactions.*
 import net.corda.node.services.vault.CashBalanceAsMetricsObserver
 import net.corda.node.services.vault.NodeVaultService
+import net.corda.node.services.vault.VaultSoftLockManager
 import net.corda.node.utilities.AddOrRemove.ADD
 import net.corda.node.utilities.AffinityExecutor
 import net.corda.node.utilities.configureDatabase
@@ -252,6 +253,7 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
 
             // TODO: this model might change but for now it provides some de-coupling
             // Add vault observers
+            VaultSoftLockManager(vault, smm)
             CashBalanceAsMetricsObserver(services, database)
             ScheduledActivityObserver(services)
             HibernateObserver(services)

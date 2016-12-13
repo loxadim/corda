@@ -197,12 +197,16 @@ interface VaultService {
     fun generateSpend(tx: TransactionBuilder,
                       amount: Amount<Currency>,
                       to: CompositeKey,
-                      onlyFromParties: Set<AbstractParty>? = null): Pair<TransactionBuilder, List<CompositeKey>>
+                      onlyFromParties: Set<AnonymousParty>? = null): Pair<TransactionBuilder, List<CompositeKey>>
 
     /**
      * Return [ContractState]s of a given [Contract] type and list of [Vault.StateStatus]
      */
     fun <T : ContractState> states(clazzes: Set<Class<T>>, statuses: EnumSet<Vault.StateStatus>): List<StateAndRef<T>>
+
+    fun  softLockReserve(id: UUID, stateRefs: Set<StateRef>)
+
+    fun  softLockRelease(id: UUID, stateRefs: Set<StateRef>? = null)
 }
 
 inline fun <reified T: ContractState> VaultService.unconsumedStates(): List<StateAndRef<T>> =

@@ -24,6 +24,7 @@ open class CashPaymentFlow(val amount: Amount<Issued<Currency>>, val recipient: 
     override fun call(): SignedTransaction {
         progressTracker.currentStep = GENERATING_TX
         val builder: TransactionBuilder = TransactionType.General.Builder(null)
+        builder.lockId = runId.uuid
         // TODO: Have some way of restricting this to states the caller controls
         val (spendTX, keysForSigning) = try {
             serviceHub.vaultService.generateSpend(

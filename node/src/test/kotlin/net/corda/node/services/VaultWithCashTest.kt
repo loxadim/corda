@@ -24,13 +24,15 @@ import net.corda.testing.MEGA_CORP
 import net.corda.testing.MEGA_CORP_KEY
 import net.corda.testing.node.MockServices
 import net.corda.testing.node.makeTestDataSourceProperties
-import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.assertj.core.api.Assertions.*
 import org.jetbrains.exposed.sql.Database
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import java.io.Closeable
 import java.util.*
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
@@ -124,6 +126,75 @@ class VaultWithCashTest {
             assertEquals(20.DOLLARS, vault.cashBalances[USD])
 
             // TODO: Flesh out these tests as needed.
+        }
+    }
+
+    @Test
+    fun `issue and attempt double spend`() {
+        val freshKey = services.keyManagementService.freshKey()
+
+        databaseTransaction(database) {
+            // A tx that sends us money.
+            val usefulTX = TransactionType.General.Builder(null).apply {
+                Cash().generateIssue(this, 100.DOLLARS `issued by` MEGA_CORP.ref(1), freshKey.public.composite, DUMMY_NOTARY)
+                signWith(MEGA_CORP_KEY)
+            }.toSignedTransaction()
+
+            assertNull(vault.cashBalances[USD])
+            services.recordTransactions(usefulTX)
+            println("Cash balance: ${vault.cashBalances[USD]}")
+        }
+
+        val backgroundExecutor = Executors.newFixedThreadPool(2)
+        val countDown = CountDownLatch(2)
+        // 1st tx that spends our money.
+        backgroundExecutor.submit {
+            databaseTransaction(database) {
+                try {
+                    val txn1 =
+                            TransactionType.General.Builder(DUMMY_NOTARY).apply {
+                                vault.generateSpend(this, 60.DOLLARS, BOB_PUBKEY)
+                                signWith(freshKey)
+                                signWith(DUMMY_NOTARY_KEY)
+                            }.toSignedTransaction()
+                    println("txn1: ${txn1.id} spent ${((txn1.tx.outputs[0].data) as Cash.State).amount}")
+                    services.recordTransactions(txn1)
+                    println("txn1: Cash balance: ${vault.cashBalances[USD]}")
+                    txn1
+                }
+                catch(e: Exception) {
+                    println(e)
+                }
+            }
+            countDown.countDown()
+        }
+
+        // 2nd tx that attempts to spend same money
+        backgroundExecutor.submit {
+            databaseTransaction(database) {
+                try {
+                    val txn2 =
+                            TransactionType.General.Builder(DUMMY_NOTARY).apply {
+                                vault.generateSpend(this, 80.DOLLARS, BOB_PUBKEY)
+                                signWith(freshKey)
+                                signWith(DUMMY_NOTARY_KEY)
+                            }.toSignedTransaction()
+                    println("txn2: ${txn2.id} spent ${((txn2.tx.outputs[0].data) as Cash.State).amount}")
+                    services.recordTransactions(txn2)
+                    println("txn2: Cash balance: ${vault.cashBalances[USD]}")
+                    txn2
+                }
+                catch(e: Exception) {
+                    println(e)
+                }
+            }
+            countDown.countDown()
+        }
+
+        countDown.await()
+        databaseTransaction(database) {
+            println("Cash balance: ${vault.cashBalances[USD]}")
+            assertThat(vault.cashBalances[USD]).isIn(DOLLARS(20),DOLLARS(40))
         }
     }
 

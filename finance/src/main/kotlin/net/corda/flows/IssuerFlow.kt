@@ -86,9 +86,11 @@ object IssuerFlow {
             if (issueTo == serviceHub.myInfo.legalIdentity)
                 return issueTx
             // now invoke Cash subflow to Move issued assetType to issue requester
+            serviceHub.vaultService.softLockReserve(runId.uuid, setOf(StateRef(issueTx.id, 0)))
             progressTracker.currentStep = TRANSFERRING
             val moveCashFlow = CashPaymentFlow(amount.issuedBy(bankOfCordaParty.ref(issuerPartyRef)), issueTo)
             val moveTx = subFlow(moveCashFlow)
+            serviceHub.vaultService.softLockRelease(runId.uuid)
             // NOTE: CashFlow PayCash calls FinalityFlow which performs a Broadcast (which stores a local copy of the txn to the ledger)
             return moveTx
         }

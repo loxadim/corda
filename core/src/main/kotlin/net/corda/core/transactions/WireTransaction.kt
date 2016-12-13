@@ -14,6 +14,7 @@ import net.corda.core.serialization.deserialize
 import net.corda.core.serialization.serialize
 import net.corda.core.utilities.Emoji
 import java.security.PublicKey
+import java.util.*
 
 /**
  * A transaction ready for serialisation, without any signatures attached. A WireTransaction is usually wrapped
@@ -32,7 +33,8 @@ class WireTransaction(
         notary: Party?,
         signers: List<CompositeKey>,
         type: TransactionType,
-        timestamp: Timestamp?
+        timestamp: Timestamp?,
+        val lockId: UUID = UUID.randomUUID()
 ) : BaseTransaction(inputs, outputs, notary, signers, type, timestamp), TraversableTransaction {
     init {
         checkInvariants()

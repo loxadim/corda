@@ -580,7 +580,7 @@ class CashTests {
         databaseTransaction(database) {
 
             val tx = TransactionType.General.Builder(DUMMY_NOTARY)
-            vault.generateSpend(tx, 80.DOLLARS, ALICE_PUBKEY, setOf(MINI_CORP))
+            vault.generateSpend(tx, 80.DOLLARS, ALICE_PUBKEY, setOf(MINI_CORP.toAnonymous()))
 
             assertEquals(vaultStatesUnconsumed.elementAt(2).ref, tx.inputStates()[0])
         }
