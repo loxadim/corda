@@ -2,7 +2,7 @@ apply plugin: 'kotlin'
 apply plugin: 'java'
 apply plugin: 'net.corda.plugins.publish-utils'
 
-description 'Corda node modules'
+description 'Corda webserver module'
 
 repositories {
     mavenLocal()
@@ -11,5 +11,16 @@ repositories {
 }
 
 dependencies {
-    compile project(':node')
+    compile project(':core')
+
+    // Web stuff: for HTTP[S] servlets
+    compile "org.eclipse.jetty:jetty-servlet:${jetty_version}"
+    compile "org.eclipse.jetty:jetty-webapp:${jetty_version}"
+    compile "javax.servlet:javax.servlet-api:3.1.0"
+    compile "org.jolokia:jolokia-agent-war:$jolokia_version"
+    compile "commons-fileupload:commons-fileupload:1.3.2"
+
+    compile ("com.fasterxml.jackson.module:jackson-module-kotlin:${jackson_version}") {
+        exclude group: 'com.fasterxml.jackson.core', module: 'jackson-annotations'
+    }
 }
