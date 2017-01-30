@@ -51,6 +51,7 @@ dependencies {
     runtime project(path: ":node:capsule", configuration: 'runtimeArtifacts')
     compile project(':core')
     compile project(':finance')
+    compile project(':node:webserver')
     compile project(':test-utils')
 
     // Javax is required for webapis

@@ -110,7 +110,7 @@ interface CordaRPCOps : RPCOps {
      */
     fun uploadAttachment(jar: InputStream): SecureHash
 
-    @Suppress("DEPRECATION")
+    // TODO: Remove this from the interface
     @Deprecated("This service will be removed in a future milestone")
     fun uploadFile(dataType: String, name: String?, file: InputStream): String
 

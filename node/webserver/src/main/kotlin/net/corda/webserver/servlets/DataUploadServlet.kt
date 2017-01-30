@@ -39,6 +39,7 @@ class DataUploadServlet: HttpServlet() {
 
             try {
                 val dataType = req.pathInfo.substring(1).substringBefore('/')
+                @Suppress("DEPRECATION") // TODO: Replace the use of uploadFile
                 messages += rpc.uploadFile(dataType, item.name, item.openStream())
                 log.info("${item.name} successfully accepted: ${messages.last()}")
             } catch(e: RuntimeException) {
