@@ -8,6 +8,34 @@ repositories {
     mavenLocal()
     mavenCentral()
     jcenter()
+    maven {
+        url 'https://dl.bintray.com/kotlin/exposed'
+    }
+}
+
+configurations {
+    integrationTestCompile.extendsFrom testCompile
+    integrationTestRuntime.extendsFrom testRuntime
+}
+
+sourceSets {
+    integrationTest {
+        kotlin {
+            compileClasspath += main.output + test.output
+            runtimeClasspath += main.output + test.output
+            srcDir file('src/integration-test/kotlin')
+        }
+    }
+    test {
+        resources {
+            srcDir "../config/test"
+        }
+    }
+    main {
+        resources {
+            srcDir "../config/dev"
+        }
+    }
 }
 
 dependencies {
@@ -38,4 +66,9 @@ dependencies {
     }
 
     testCompile "junit:junit:$junit_version"
+}
+
+task integrationTest(type: Test) {
+    testClassesDir = sourceSets.integrationTest.output.classesDir
+    classpath = sourceSets.integrationTest.runtimeClasspath
 }
