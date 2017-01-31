@@ -61,8 +61,7 @@ fun main(args: Array<String>) {
 
     drawBanner()
 
-    val logDir = if (cmdlineOptions.isWebserver) "logs/web" else "logs"
-    System.setProperty("log-path", (cmdlineOptions.baseDirectory / logDir).toString())
+    System.setProperty("log-path", (cmdlineOptions.baseDirectory / "logs").toString())
 
     val log = LoggerFactory.getLogger("Main")
     printBasicNodeInfo("Logs can be found in", System.getProperty("log-path"))
@@ -94,11 +93,7 @@ fun main(args: Array<String>) {
     log.info("VM ${info.vmName} ${info.vmVendor} ${info.vmVersion}")
     log.info("Machine: ${InetAddress.getLocalHost().hostName}")
     log.info("Working Directory: ${cmdlineOptions.baseDirectory}")
-    if (cmdlineOptions.isWebserver) {
-        log.info("Starting as webserver on ${conf.webAddress}")
-    } else {
-        log.info("Starting as node on ${conf.artemisAddress}")
-    }
+    log.info("Starting as node on ${conf.artemisAddress}")
 
     try {
         cmdlineOptions.baseDirectory.createDirectories()
