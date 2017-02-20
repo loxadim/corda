@@ -11,6 +11,7 @@ import net.corda.core.messaging.MessageHandlerRegistration
 import net.corda.core.messaging.MessageRecipients
 import net.corda.core.messaging.SingleMessageRecipient
 import net.corda.core.messaging.createMessage
+import net.corda.core.messaging.*
 import net.corda.core.node.NodeInfo
 import net.corda.core.node.services.DEFAULT_SESSION_ID
 import net.corda.core.node.services.NetworkMapCache
@@ -51,15 +52,15 @@ interface NetworkMapService {
 
     companion object {
         val DEFAULT_EXPIRATION_PERIOD = Period.ofWeeks(4)
-        val FETCH_FLOW_TOPIC = "platform.network_map.fetch"
-        val QUERY_FLOW_TOPIC = "platform.network_map.query"
-        val REGISTER_FLOW_TOPIC = "platform.network_map.register"
-        val SUBSCRIPTION_FLOW_TOPIC = "platform.network_map.subscribe"
+        val FETCH_PROTOCOL_TOPIC = "platform.network_map.fetch"
+        val QUERY_PROTOCOL_TOPIC = "platform.network_map.query"
+        val REGISTER_PROTOCOL_TOPIC = "platform.network_map.register"
+        val SUBSCRIPTION_PROTOCOL_TOPIC = "platform.network_map.subscribe"
         // Base topic used when pushing out updates to the network map. Consumed, for example, by the map cache.
         // When subscribing to these updates, remember they must be acknowledged
-        val PUSH_FLOW_TOPIC = "platform.network_map.push"
+        val PUSH_PROTOCOL_TOPIC = "platform.network_map.push"
         // Base topic for messages acknowledging pushed updates
-        val PUSH_ACK_FLOW_TOPIC = "platform.network_map.push_ack"
+        val PUSH_ACK_PROTOCOL_TOPIC = "platform.network_map.push_ack"
 
         val logger = loggerFor<NetworkMapService>()
 
@@ -146,19 +147,19 @@ abstract class AbstractNetworkMapService
 
     protected fun setup() {
         // Register message handlers
-        handlers += addMessageHandler(NetworkMapService.FETCH_FLOW_TOPIC,
+        handlers += addMessageHandler(NetworkMapService.FETCH_PROTOCOL_TOPIC,
                 { req: NetworkMapService.FetchMapRequest -> processFetchAllRequest(req) }
         )
-        handlers += addMessageHandler(NetworkMapService.QUERY_FLOW_TOPIC,
+        handlers += addMessageHandler(NetworkMapService.QUERY_PROTOCOL_TOPIC,
                 { req: NetworkMapService.QueryIdentityRequest -> processQueryRequest(req) }
         )
-        handlers += addMessageHandler(NetworkMapService.REGISTER_FLOW_TOPIC,
+        handlers += addMessageHandler(NetworkMapService.REGISTER_PROTOCOL_TOPIC,
                 { req: NetworkMapService.RegistrationRequest -> processRegistrationChangeRequest(req) }
         )
-        handlers += addMessageHandler(NetworkMapService.SUBSCRIPTION_FLOW_TOPIC,
+        handlers += addMessageHandler(NetworkMapService.SUBSCRIPTION_PROTOCOL_TOPIC,
                 { req: NetworkMapService.SubscribeRequest -> processSubscriptionRequest(req) }
         )
-        handlers += net.addMessageHandler(NetworkMapService.PUSH_ACK_FLOW_TOPIC, DEFAULT_SESSION_ID) { message, r ->
+        handlers += net.addMessageHandler(NetworkMapService.PUSH_ACK_PROTOCOL_TOPIC, DEFAULT_SESSION_ID) { message, r ->
             val req = message.data.deserialize<NetworkMapService.UpdateAcknowledge>()
             processAcknowledge(req)
         }
@@ -204,7 +205,7 @@ abstract class AbstractNetworkMapService
         //       to a MessageRecipientGroup that nodes join/leave, rather than the network map
         //       service itself managing the group
         val update = NetworkMapService.Update(wireReg, mapVersion, net.myAddress).serialize().bytes
-        val message = net.createMessage(NetworkMapService.PUSH_FLOW_TOPIC, DEFAULT_SESSION_ID, update)
+        val message = net.createMessage(NetworkMapService.PUSH_PROTOCOL_TOPIC, DEFAULT_SESSION_ID, DEFAULT_VERSION, update)
 
         subscribers.locked {
             val toRemove = mutableListOf<SingleMessageRecipient>()

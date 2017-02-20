@@ -67,6 +67,7 @@ class NodeMessagingClient(override val config: NodeConfiguration,
         // confusion.
         const val TOPIC_PROPERTY = "platform-topic"
         const val SESSION_ID_PROPERTY = "session-id"
+        const val VERSION_PROPERTY = "version" //todo
         val AMQ_DELAY = Integer.valueOf(System.getProperty("amq.delivery.delay.ms", "0"))
     }
 
@@ -252,17 +253,23 @@ class NodeMessagingClient(override val config: NodeConfiguration,
                 log.warn("Received message without a $SESSION_ID_PROPERTY property, ignoring")
                 return null
             }
+            if (!message.containsProperty(VERSION_PROPERTY)) {
+                log.warn("Received message without a $VERSION_PROPERTY property, ignoring")
+                return null
+            }
             val topic = message.getStringProperty(TOPIC_PROPERTY)
             val sessionID = message.getLongProperty(SESSION_ID_PROPERTY)
+            val version = message.getStringProperty(VERSION_PROPERTY)
             // Use the magic deduplication property built into Artemis as our message identity too
             val uuid = UUID.fromString(message.getStringProperty(HDR_DUPLICATE_DETECTION_ID))
             val user = requireNotNull(message.getStringProperty(HDR_VALIDATED_USER)) { "Message is not authenticated" }
-            log.info("Received message from: ${message.address} user: $user topic: $topic sessionID: $sessionID uuid: $uuid")
+            log.info("Received message from: ${message.address} user: $user topic: $topic sessionID: $sessionID uuid: $uuid" +
+                    " version: $version")
 
             val body = ByteArray(message.bodySize).apply { message.bodyBuffer.readBytes(this) }
 
             val msg = object : ReceivedMessage {
-                override val topicSession = TopicSession(topic, sessionID)
+                override val topicSession = TopicSession(topic, sessionID, version)
                 override val data: ByteArray = body
                 override val peer: X500Name = X500Name(user)
                 override val debugTimestamp: Instant = Instant.ofEpochMilli(message.timestamp)
@@ -277,6 +284,7 @@ class NodeMessagingClient(override val config: NodeConfiguration,
         }
     }
 
+    //todo versioning changes
     private fun deliver(msg: ReceivedMessage): Boolean {
         state.checkNotLocked()
         // Because handlers is a COW list, the loop inside filter will operate on a snapshot. Handlers being added
@@ -366,6 +374,7 @@ class NodeMessagingClient(override val config: NodeConfiguration,
                     val sessionID = message.topicSession.sessionID
                     putStringProperty(TOPIC_PROPERTY, message.topicSession.topic)
                     putLongProperty(SESSION_ID_PROPERTY, sessionID)
+                    putStringProperty(VERSION_PROPERTY, message.topicSession.version)
                     writeBodyBufferBytes(message.data)
                     // Use the magic deduplication property built into Artemis as our message identity too
                     putStringProperty(HDR_DUPLICATE_DETECTION_ID, SimpleString(message.uniqueMessageId.toString()))
@@ -376,7 +385,7 @@ class NodeMessagingClient(override val config: NodeConfiguration,
                     }
                 }
                 log.info("Send to: $mqAddress topic: ${message.topicSession.topic} sessionID: ${message.topicSession.sessionID} " +
-                        "uuid: ${message.uniqueMessageId}")
+                        "flow version: ${message.topicSession.version} uuid: ${message.uniqueMessageId}")
                 producer!!.send(mqAddress, artemisMessage)
             }
         }
@@ -409,8 +418,9 @@ class NodeMessagingClient(override val config: NodeConfiguration,
 
     override fun addMessageHandler(topic: String,
                                    sessionID: Long,
+                                   version: String,
                                    callback: (ReceivedMessage, MessageHandlerRegistration) -> Unit): MessageHandlerRegistration {
-        return addMessageHandler(TopicSession(topic, sessionID), callback)
+        return addMessageHandler(TopicSession(topic, sessionID, version), callback)
     }
 
     override fun addMessageHandler(topicSession: TopicSession,

@@ -7,6 +7,7 @@ import com.google.common.util.concurrent.SettableFuture
 import com.typesafe.config.ConfigFactory.empty
 import net.corda.core.crypto.composite
 import net.corda.core.crypto.generateKeyPair
+import net.corda.core.messaging.DEFAULT_VERSION
 import net.corda.core.messaging.Message
 import net.corda.core.messaging.RPCOps
 import net.corda.core.messaging.createMessage
@@ -129,7 +130,7 @@ class ArtemisMessagingTests {
         val receivedMessages = LinkedBlockingQueue<Message>()
 
         val messagingClient = createAndStartClientAndServer(receivedMessages)
-        val message = messagingClient.createMessage(topic, DEFAULT_SESSION_ID, "first msg".toByteArray())
+        val message = messagingClient.createMessage(topic, DEFAULT_SESSION_ID, DEFAULT_VERSION, "first msg".toByteArray())
         messagingClient.send(message, messagingClient.myAddress)
 
         val actual: Message = receivedMessages.take()
@@ -145,10 +146,11 @@ class ArtemisMessagingTests {
         val receivedMessages = LinkedBlockingQueue<Message>()
 
         val messagingClient = createAndStartClientAndServer(receivedMessages)
-        val message = messagingClient.createMessage(topic, DEFAULT_SESSION_ID, "first msg".toByteArray())
+        val message = messagingClient.createMessage(topic, DEFAULT_SESSION_ID, DEFAULT_VERSION, "first msg".toByteArray())
         messagingClient.send(message, messagingClient.myAddress)
 
-        val networkMapMessage = messagingClient.createMessage(NetworkMapService.FETCH_FLOW_TOPIC, DEFAULT_SESSION_ID, "second msg".toByteArray())
+        val networkMapMessage = messagingClient.createMessage(NetworkMapService.FETCH_PROTOCOL_TOPIC, DEFAULT_SESSION_ID,
+                DEFAULT_VERSION, "second msg".toByteArray())
         messagingClient.send(networkMapMessage, messagingClient.myAddress)
 
         val actual: Message = receivedMessages.take()
@@ -170,11 +172,11 @@ class ArtemisMessagingTests {
 
         val messagingClient = createAndStartClientAndServer(receivedMessages)
         for (iter in 1..iterations) {
-            val message = messagingClient.createMessage(topic, DEFAULT_SESSION_ID, "first msg $iter".toByteArray())
+            val message = messagingClient.createMessage(topic, DEFAULT_SESSION_ID, DEFAULT_VERSION, "first msg $iter".toByteArray())
             messagingClient.send(message, messagingClient.myAddress)
         }
 
-        val networkMapMessage = messagingClient.createMessage(NetworkMapService.FETCH_FLOW_TOPIC, DEFAULT_SESSION_ID, "second msg".toByteArray())
+        val networkMapMessage = messagingClient.createMessage(NetworkMapService.FETCH_PROTOCOL_TOPIC, DEFAULT_SESSION_ID, DEFAULT_VERSION, "second msg".toByteArray())
         messagingClient.send(networkMapMessage, messagingClient.myAddress)
 
         val actual: Message = receivedMessages.take()
@@ -207,7 +209,7 @@ class ArtemisMessagingTests {
         messagingClient.addMessageHandler(topic) { message, r ->
             receivedMessages.add(message)
         }
-        messagingClient.addMessageHandler(NetworkMapService.FETCH_FLOW_TOPIC) { message, r ->
+        messagingClient.addMessageHandler(NetworkMapService.FETCH_PROTOCOL_TOPIC) { message, r ->
             receivedMessages.add(message)
         }
         // Run after the handlers are added, otherwise (some of) the messages get delivered and discarded / dead-lettered.

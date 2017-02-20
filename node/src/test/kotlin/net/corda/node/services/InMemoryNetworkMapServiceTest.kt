@@ -3,6 +3,7 @@ package net.corda.node.services
 import com.google.common.util.concurrent.ListenableFuture
 import net.corda.core.getOrThrow
 import net.corda.core.map
+import net.corda.core.messaging.DEFAULT_VERSION
 import net.corda.core.messaging.send
 import net.corda.core.node.services.DEFAULT_SESSION_ID
 import net.corda.flows.sendRequest
@@ -10,10 +11,10 @@ import net.corda.node.services.network.AbstractNetworkMapService
 import net.corda.node.services.network.InMemoryNetworkMapService
 import net.corda.node.services.network.NetworkMapService
 import net.corda.node.services.network.NetworkMapService.*
-import net.corda.node.services.network.NetworkMapService.Companion.FETCH_FLOW_TOPIC
-import net.corda.node.services.network.NetworkMapService.Companion.PUSH_ACK_FLOW_TOPIC
-import net.corda.node.services.network.NetworkMapService.Companion.REGISTER_FLOW_TOPIC
-import net.corda.node.services.network.NetworkMapService.Companion.SUBSCRIPTION_FLOW_TOPIC
+import net.corda.node.services.network.NetworkMapService.Companion.FETCH_PROTOCOL_TOPIC
+import net.corda.node.services.network.NetworkMapService.Companion.PUSH_ACK_PROTOCOL_TOPIC
+import net.corda.node.services.network.NetworkMapService.Companion.REGISTER_PROTOCOL_TOPIC
+import net.corda.node.services.network.NetworkMapService.Companion.SUBSCRIPTION_PROTOCOL_TOPIC
 import net.corda.node.services.network.NodeRegistration
 import net.corda.node.utilities.AddOrRemove
 import net.corda.node.utilities.databaseTransaction
@@ -55,7 +56,8 @@ abstract class AbstractNetworkMapServiceTest {
         swizzle()
 
         assertEquals(1, service().nodes.count())
-        assertEquals(registerNode.info, service().processQueryRequest(NetworkMapService.QueryIdentityRequest(registerNode.info.legalIdentity, mapServiceNode.info.address, Long.MIN_VALUE)).node)
+        val actual = service().processQueryRequest(NetworkMapService.QueryIdentityRequest(registerNode.info.legalIdentity, mapServiceNode.info.address, Long.MIN_VALUE)).node
+        assertEquals(registerNode.info, actual)
 
         // Re-registering should be a no-op
         service().processRegistrationChangeRequest(RegistrationRequest(addWireChange, mapServiceNode.info.address, Long.MIN_VALUE))
@@ -167,23 +169,23 @@ abstract class AbstractNetworkMapServiceTest {
 
     private fun MockNode.registration(mapServiceNode: MockNode, reg: NodeRegistration, privateKey: PrivateKey): ListenableFuture<RegistrationResponse> {
         val req = RegistrationRequest(reg.toWire(privateKey), services.networkService.myAddress)
-        return services.networkService.sendRequest(REGISTER_FLOW_TOPIC, req, mapServiceNode.info.address)
+        return services.networkService.sendRequest(REGISTER_PROTOCOL_TOPIC, req, mapServiceNode.info.address)
     }
 
     private fun MockNode.subscribe(mapServiceNode: MockNode, subscribe: Boolean): ListenableFuture<SubscribeResponse> {
         val req = SubscribeRequest(subscribe, services.networkService.myAddress)
-        return services.networkService.sendRequest(SUBSCRIPTION_FLOW_TOPIC, req, mapServiceNode.info.address)
+        return services.networkService.sendRequest(SUBSCRIPTION_PROTOCOL_TOPIC, req, mapServiceNode.info.address)
     }
 
     private fun MockNode.updateAcknowlege(mapServiceNode: MockNode, mapVersion: Int) {
         val req = UpdateAcknowledge(mapVersion, services.networkService.myAddress)
-        services.networkService.send(PUSH_ACK_FLOW_TOPIC, DEFAULT_SESSION_ID, req, mapServiceNode.info.address)
+        services.networkService.send(PUSH_ACK_PROTOCOL_TOPIC, DEFAULT_SESSION_ID, DEFAULT_VERSION, req, mapServiceNode.info.address)
     }
 
     private fun MockNode.fetchMap(mapServiceNode: MockNode, subscribe: Boolean, ifChangedSinceVersion: Int? = null): Future<Collection<NodeRegistration>?> {
         val net = services.networkService
         val req = FetchMapRequest(subscribe, ifChangedSinceVersion, net.myAddress)
-        return net.sendRequest<FetchMapResponse>(FETCH_FLOW_TOPIC, req, mapServiceNode.info.address).map { it.nodes }
+        return net.sendRequest<FetchMapResponse>(FETCH_PROTOCOL_TOPIC, req, mapServiceNode.info.address).map { it.nodes }
     }
 }
 

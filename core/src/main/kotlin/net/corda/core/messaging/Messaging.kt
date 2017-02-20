@@ -39,7 +39,8 @@ interface MessagingService {
      * @param sessionID identifier for the session the message is part of. For services listening before
      * a session is established, use [DEFAULT_SESSION_ID].
      */
-    fun addMessageHandler(topic: String = "", sessionID: Long = DEFAULT_SESSION_ID, callback: (ReceivedMessage, MessageHandlerRegistration) -> Unit): MessageHandlerRegistration
+   fun addMessageHandler(topic: String = "", sessionID: Long = DEFAULT_SESSION_ID, version: String = DEFAULT_VERSION,
+                          callback: (ReceivedMessage, MessageHandlerRegistration) -> Unit): MessageHandlerRegistration
 
     /**
      * The provided function will be invoked for each received message whose topic and session matches.  The callback
@@ -96,8 +97,9 @@ interface MessagingService {
  * @param sessionID identifier for the session the message is part of. For messages sent to services before the
  * construction of a session, use [DEFAULT_SESSION_ID].
  */
-fun MessagingService.createMessage(topic: String, sessionID: Long = DEFAULT_SESSION_ID, data: ByteArray): Message
-        = createMessage(TopicSession(topic, sessionID), data)
+fun MessagingService.createMessage(topic: String, sessionID: Long = DEFAULT_SESSION_ID,
+                                   version: String = DEFAULT_VERSION, data: ByteArray): Message
+        = createMessage(TopicSession(topic, sessionID, version), data)
 
 /**
  * Registers a handler for the given topic and session ID that runs the given callback with the message and then removes
@@ -110,8 +112,8 @@ fun MessagingService.createMessage(topic: String, sessionID: Long = DEFAULT_SESS
  * @param sessionID identifier for the session the message is part of. For services listening before
  * a session is established, use [DEFAULT_SESSION_ID].
  */
-fun MessagingService.runOnNextMessage(topic: String, sessionID: Long, callback: (ReceivedMessage) -> Unit)
-        = runOnNextMessage(TopicSession(topic, sessionID), callback)
+fun MessagingService.runOnNextMessage(topic: String, sessionID: Long, version: String, callback: (ReceivedMessage) -> Unit)
+        = runOnNextMessage(TopicSession(topic, sessionID, version), callback)
 
 /**
  * Registers a handler for the given topic and session that runs the given callback with the message and then removes
@@ -134,9 +136,9 @@ inline fun MessagingService.runOnNextMessage(topicSession: TopicSession, crossin
  * Returns a [ListenableFuture] of the next message payload ([Message.data]) which is received on the given topic and sessionId.
  * The payload is deserialized to an object of type [M]. Any exceptions thrown will be captured by the future.
  */
-fun <M : Any> MessagingService.onNext(topic: String, sessionId: Long): ListenableFuture<M> {
+fun <M : Any> MessagingService.onNext(topic: String, sessionId: Long, version: String): ListenableFuture<M> {
     val messageFuture = SettableFuture.create<M>()
-    runOnNextMessage(topic, sessionId) { message ->
+    runOnNextMessage(topic, sessionId, version) { message ->
         messageFuture.catch {
             message.data.deserialize<M>()
         }
@@ -144,8 +146,9 @@ fun <M : Any> MessagingService.onNext(topic: String, sessionId: Long): Listenabl
     return messageFuture
 }
 
-fun MessagingService.send(topic: String, sessionID: Long, payload: Any, to: MessageRecipients, uuid: UUID = UUID.randomUUID())
-        = send(TopicSession(topic, sessionID), payload, to, uuid)
+fun MessagingService.send(topic: String, sessionID: Long, version: String, payload: Any,
+                          to: MessageRecipients, uuid: UUID = UUID.randomUUID())
+        = send(TopicSession(topic, sessionID, version), payload, to, uuid)
 
 fun MessagingService.send(topicSession: TopicSession, payload: Any, to: MessageRecipients, uuid: UUID = UUID.randomUUID())
         = send(createMessage(topicSession, payload.serialize().bytes, uuid), to)
@@ -160,9 +163,12 @@ interface MessageHandlerRegistration
  * @param sessionID identifier for the session the message is part of. For services listening before
  * a session is established, use [DEFAULT_SESSION_ID].
  */
-data class TopicSession(val topic: String, val sessionID: Long = DEFAULT_SESSION_ID) {
-    fun isBlank() = topic.isBlank() && sessionID == DEFAULT_SESSION_ID
-    override fun toString(): String = "$topic.$sessionID"
+val DEFAULT_VERSION = ""//todo empty
+
+data class TopicSession(val topic: String, val sessionID: Long = DEFAULT_SESSION_ID, val version: String = DEFAULT_VERSION) {
+    fun isBlank() = topic.isBlank() && sessionID == DEFAULT_SESSION_ID && DEFAULT_VERSION == ""
+
+    override fun toString(): String = "$topic.$sessionID.$version"
 }
 
 /**

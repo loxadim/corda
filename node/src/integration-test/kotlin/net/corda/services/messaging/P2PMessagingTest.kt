@@ -7,6 +7,7 @@ import net.corda.core.messaging.MessageRecipients
 import net.corda.core.messaging.SingleMessageRecipient
 import net.corda.core.messaging.createMessage
 import net.corda.core.node.services.DEFAULT_SESSION_ID
+import net.corda.core.messaging.DEFAULT_VERSION
 import net.corda.core.node.services.ServiceInfo
 import net.corda.core.serialization.deserialize
 import net.corda.core.serialization.serialize
@@ -108,7 +109,7 @@ class P2PMessagingTest : NodeBasedTest() {
     private fun Node.respondWith(message: Any) {
         net.addMessageHandler(javaClass.name, DEFAULT_SESSION_ID) { netMessage, reg ->
             val request = netMessage.data.deserialize<TestRequest>()
-            val response = net.createMessage(javaClass.name, request.sessionID, message.serialize().bytes)
+            val response = net.createMessage(javaClass.name, request.sessionID, DEFAULT_VERSION, message.serialize().bytes) // todo
             net.send(response, request.replyTo)
         }
     }

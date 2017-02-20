@@ -9,7 +9,7 @@ import net.corda.flows.sendRequest
 import net.corda.node.internal.NetworkMapInfo
 import net.corda.node.services.config.configureWithDevSSLCertificate
 import net.corda.node.services.network.NetworkMapService
-import net.corda.node.services.network.NetworkMapService.Companion.REGISTER_FLOW_TOPIC
+import net.corda.node.services.network.NetworkMapService.Companion.REGISTER_PROTOCOL_TOPIC
 import net.corda.node.services.network.NetworkMapService.RegistrationRequest
 import net.corda.node.services.network.NodeRegistration
 import net.corda.node.utilities.AddOrRemove
@@ -63,6 +63,6 @@ class P2PSecurityTest : NodeBasedTest() {
         val nodeInfo = NodeInfo(net.myAddress, Party(registrationName, identity.public))
         val registration = NodeRegistration(nodeInfo, System.currentTimeMillis(), AddOrRemove.ADD, Instant.MAX)
         val request = RegistrationRequest(registration.toWire(identity.private), net.myAddress)
-        return net.sendRequest<NetworkMapService.RegistrationResponse>(REGISTER_FLOW_TOPIC, request, networkMapNode.net.myAddress)
+        return net.sendRequest<NetworkMapService.RegistrationResponse>(REGISTER_PROTOCOL_TOPIC, request, networkMapNode.net.myAddress)
     }
 }

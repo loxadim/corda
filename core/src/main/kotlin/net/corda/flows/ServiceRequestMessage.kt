@@ -19,7 +19,7 @@ interface ServiceRequestMessage {
 fun <R : Any> MessagingService.sendRequest(topic: String,
                                            request: ServiceRequestMessage,
                                            target: MessageRecipients): ListenableFuture<R> {
-    val responseFuture = onNext<R>(topic, request.sessionID)
-    send(topic, DEFAULT_SESSION_ID, request, target)
+    val responseFuture = onNext<R>(topic, request.sessionID, DEFAULT_VERSION) // TODO
+    send(topic, DEFAULT_SESSION_ID, DEFAULT_VERSION, request, target)
     return responseFuture
 }

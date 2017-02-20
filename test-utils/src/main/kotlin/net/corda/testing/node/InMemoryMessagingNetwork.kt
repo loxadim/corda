@@ -312,8 +312,8 @@ class InMemoryMessagingNetwork(
             }
         }
 
-        override fun addMessageHandler(topic: String, sessionID: Long, callback: (ReceivedMessage, MessageHandlerRegistration) -> Unit): MessageHandlerRegistration
-                = addMessageHandler(TopicSession(topic, sessionID), callback)
+        override fun addMessageHandler(topic: String, sessionID: Long, flowVersion: String, callback: (ReceivedMessage, MessageHandlerRegistration) -> Unit): MessageHandlerRegistration
+                = addMessageHandler(TopicSession(topic, sessionID, flowVersion), callback)
 
         override fun addMessageHandler(topicSession: TopicSession, callback: (ReceivedMessage, MessageHandlerRegistration) -> Unit): MessageHandlerRegistration {
             check(running)

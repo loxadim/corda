@@ -3,6 +3,7 @@ package net.corda.node.services.api
 import net.corda.core.messaging.Message
 import net.corda.core.messaging.MessageHandlerRegistration
 import net.corda.core.messaging.createMessage
+import net.corda.core.messaging.DEFAULT_VERSION
 import net.corda.core.node.services.DEFAULT_SESSION_ID
 import net.corda.core.serialization.SingletonSerializeAsToken
 import net.corda.core.serialization.deserialize
@@ -37,7 +38,7 @@ abstract class AbstractNodeService(val services: ServiceHubInternal) : Singleton
                 val response = handler(request)
                 // If the return type R is Unit, then do not send a response
                 if (response.javaClass != Unit.javaClass) {
-                    val msg = net.createMessage(topic, request.sessionID, response.serialize().bytes)
+                    val msg = net.createMessage(topic, request.sessionID, DEFAULT_VERSION, response.serialize().bytes) //todo remove
                     net.send(msg, request.replyTo)
                 }
             } catch(e: Exception) {
