@@ -6,11 +6,11 @@ import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.Party
 import net.corda.core.flows.FlowLogic
 import net.corda.core.flows.FlowLogicRefFactory
+import net.corda.core.flows.FlowVersion
 import net.corda.core.node.CordaPluginRegistry
 import net.corda.core.node.services.ServiceInfo
 import net.corda.core.node.services.linearHeadsOfType
 import net.corda.core.utilities.DUMMY_NOTARY
-import net.corda.core.utilities.DUMMY_NOTARY_KEY
 import net.corda.flows.FinalityFlow
 import net.corda.node.services.network.NetworkMapService
 import net.corda.node.services.transactions.ValidatingNotaryService
@@ -52,6 +52,7 @@ class ScheduledFlowTests {
         }
     }
 
+    @FlowVersion("1.0", "InsertInitialStateFlow", arrayOf("1.0"))
     class InsertInitialStateFlow(val destination: Party) : FlowLogic<Unit>() {
         @Suspendable
         override fun call() {
@@ -66,6 +67,7 @@ class ScheduledFlowTests {
         }
     }
 
+    @FlowVersion("1.0", "ScheduledFlow", arrayOf("1.0"))
     class ScheduledFlow(val stateRef: StateRef) : FlowLogic<Unit>() {
         @Suspendable
         override fun call() {

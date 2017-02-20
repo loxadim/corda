@@ -5,6 +5,7 @@ import net.corda.core.contracts.Amount
 import net.corda.core.contracts.Issued
 import net.corda.core.crypto.Party
 import net.corda.core.flows.FlowLogic
+import net.corda.core.flows.FlowVersion
 import net.corda.core.serialization.OpaqueBytes
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.ProgressTracker
@@ -15,6 +16,7 @@ import java.util.*
  *
  * @param command Indicates what Cash transaction to create with what parameters.
  */
+@FlowVersion("1.0", "CashFlow", arrayOf("1.0")) //todo cash flow
 class CashFlow(val command: CashFlow.Command, override val progressTracker: ProgressTracker) : FlowLogic<SignedTransaction>() {
     constructor(command: CashFlow.Command) : this(command, tracker())
 

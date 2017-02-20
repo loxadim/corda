@@ -6,6 +6,7 @@ import net.corda.core.contracts.DealState
 import net.corda.core.contracts.StateRef
 import net.corda.core.crypto.*
 import net.corda.core.flows.FlowLogic
+import net.corda.core.flows.FlowVersion
 import net.corda.core.node.NodeInfo
 import net.corda.core.node.recordTransactions
 import net.corda.core.node.services.ServiceType
@@ -56,6 +57,7 @@ object TwoPartyDealFlow {
      * There's a good chance we can push at least some of this logic down into core flow logic
      * and helper methods etc.
      */
+    @FlowVersion("1.0", "TwoPartyDealFlow", arrayOf("1.0"))
     abstract class Primary(override val progressTracker: ProgressTracker = Primary.tracker()) : FlowLogic<SignedTransaction>() {
 
         companion object {
@@ -75,9 +77,9 @@ object TwoPartyDealFlow {
         abstract val otherParty: Party
         abstract val myKeyPair: KeyPair
 
-        override fun getCounterpartyMarker(party: Party): Class<*> {
+        override fun getCounterpartyMarker(party: Party): String {
             return if (serviceHub.networkMapCache.regulatorNodes.any { it.legalIdentity == party }) {
-                MarkerForBogusRegulatorFlow::class.java
+                MarkerForBogusRegulatorFlow::class.java.simpleName // TODO
             } else {
                 super.getCounterpartyMarker(party)
             }
@@ -191,6 +193,7 @@ object TwoPartyDealFlow {
      * There's a good chance we can push at least some of this logic down into core flow logic
      * and helper methods etc.
      */
+    @FlowVersion("1.0", "TwoPartyDealFlow", arrayOf("1.0"))
     abstract class Secondary<U>(override val progressTracker: ProgressTracker = Secondary.tracker()) : FlowLogic<SignedTransaction>() {
 
         companion object {
@@ -270,11 +273,11 @@ object TwoPartyDealFlow {
     /**
      * One side of the flow for inserting a pre-agreed deal.
      */
+    @FlowVersion("1.0", "TwoPartyDealFlow", arrayOf("1.0"))
     open class Instigator(override val otherParty: Party,
                           override val payload: AutoOffer,
                           override val myKeyPair: KeyPair,
                           override val progressTracker: ProgressTracker = Primary.tracker()) : Primary() {
-
         override val notaryNode: NodeInfo get() =
         serviceHub.networkMapCache.notaryNodes.filter { it.notaryIdentity == payload.notary }.single()
     }
@@ -282,9 +285,9 @@ object TwoPartyDealFlow {
     /**
      * One side of the flow for inserting a pre-agreed deal.
      */
+    @FlowVersion("1.0", "TwoPartyDealFlow", arrayOf("1.0"))
     open class Acceptor(override val otherParty: Party,
                         override val progressTracker: ProgressTracker = Secondary.tracker()) : Secondary<AutoOffer>() {
-
         override fun validateHandshake(handshake: Handshake<AutoOffer>): Handshake<AutoOffer> {
             // What is the seller trying to sell us?
             val autoOffer = handshake.payload

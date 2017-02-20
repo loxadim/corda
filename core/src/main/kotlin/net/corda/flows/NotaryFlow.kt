@@ -7,6 +7,8 @@ import net.corda.core.crypto.SignedData
 import net.corda.core.crypto.signWithECDSA
 import net.corda.core.flows.FlowException
 import net.corda.core.flows.FlowLogic
+import net.corda.core.flows.FlowVersion
+import net.corda.core.node.services.PartyInfo
 import net.corda.core.node.services.TimestampChecker
 import net.corda.core.node.services.UniquenessException
 import net.corda.core.node.services.UniquenessProvider
@@ -24,9 +26,21 @@ object NotaryFlow {
      * @throws NotaryException in case the any of the inputs to the transaction have been consumed
      *                         by another transaction or the timestamp is invalid.
      */
+    @FlowVersion("1.0", "NotaryFlow", arrayOf("1.0"))
     open class Client(private val stx: SignedTransaction,
                       override val progressTracker: ProgressTracker) : FlowLogic<DigitalSignature.WithKey>() {
         constructor(stx: SignedTransaction) : this(stx, Client.tracker())
+        override fun getCounterpartyMarker(party: Party): String = "NotaryFlow"
+
+//        // TODO or just assume that there is only one NotaryFlow
+//        override fun getCounterpartyMarker(party: Party): String {
+//            val partyInfo = serviceHub.networkMapCache.getPartyInfo(party)
+//            return when (partyInfo) {
+//                is PartyInfo.Service -> getNotaryFlowName(partyInfo)
+//                else -> javaClass.simpleName
+//            }
+//        }
+//        fun getNotaryFlowName(party)
 
         companion object {
             object REQUESTING : ProgressTracker.Step("Requesting signature by Notary service")
@@ -82,10 +96,10 @@ object NotaryFlow {
      *
      * TODO: the notary service should only be able to see timestamp commands and inputs
      */
+    @FlowVersion("1.0", "NotaryFlow", arrayOf("1.0")) //TODO client can communicate with different notary flows: validating, non-validating
     open class Service(val otherSide: Party,
                        val timestampChecker: TimestampChecker,
                        val uniquenessProvider: UniquenessProvider) : FlowLogic<Unit>() {
-
         @Suspendable
         override fun call() {
             val stx = receive<SignRequest>(otherSide).unwrap { it.tx }

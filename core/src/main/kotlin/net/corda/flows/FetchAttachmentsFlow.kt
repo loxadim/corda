@@ -4,6 +4,7 @@ import net.corda.core.contracts.Attachment
 import net.corda.core.crypto.Party
 import net.corda.core.crypto.SecureHash
 import net.corda.core.crypto.sha256
+import net.corda.core.flows.FlowVersion
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 
@@ -11,6 +12,7 @@ import java.io.InputStream
  * Given a set of hashes either loads from from local storage  or requests them from the other peer. Downloaded
  * attachments are saved to local storage automatically.
  */
+@FlowVersion("1.0", "FetchAttachmentsFlow", arrayOf("1.0"))
 class FetchAttachmentsFlow(requests: Set<SecureHash>,
                            otherSide: Party) : FetchDataFlow<Attachment, ByteArray>(requests, otherSide) {
 

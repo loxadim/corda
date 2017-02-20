@@ -6,6 +6,7 @@ import net.corda.core.contracts.*
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.Party
 import net.corda.core.flows.FlowLogic
+import net.corda.core.flows.FlowVersion
 import net.corda.core.node.NodeInfo
 import net.corda.core.node.PluginServiceHub
 import net.corda.core.node.services.ServiceType
@@ -32,6 +33,7 @@ object FixingFlow {
      * of the flow that is run by the party with the fixed leg of swap deal, which is the basis for deciding
      * who does what in the flow.
      */
+    @FlowVersion("1.0", "FixingFlow", arrayOf("1.0"))
     class Fixer(override val otherParty: Party,
                 override val progressTracker: ProgressTracker = TwoPartyDealFlow.Secondary.tracker()) : TwoPartyDealFlow.Secondary<FixingSession>() {
 
@@ -99,6 +101,7 @@ object FixingFlow {
      * is just the "side" of the flow run by the party with the floating leg as a way of deciding who
      * does what in the flow.
      */
+    @FlowVersion("1.0", "FixingFlow", arrayOf("1.0"))
     class Floater(override val otherParty: Party,
                   override val payload: FixingSession,
                   override val progressTracker: ProgressTracker = TwoPartyDealFlow.Primary.tracker()) : TwoPartyDealFlow.Primary() {
@@ -132,6 +135,7 @@ object FixingFlow {
      *
      * TODO: Replace [FixingSession] and [FixingSessionInitiationHandler] with generic session initiation logic once it exists.
      */
+    @FlowVersion("1.0", "FixingFlowDecider", arrayOf("1.0"))
     class FixingRoleDecider(val ref: StateRef, override val progressTracker: ProgressTracker) : FlowLogic<Unit>() {
         @Suppress("unused")  // Used via reflection.
         constructor(ref: StateRef) : this(ref, tracker())

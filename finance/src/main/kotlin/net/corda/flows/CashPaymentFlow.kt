@@ -5,6 +5,7 @@ import net.corda.core.contracts.*
 import net.corda.core.crypto.Party
 import net.corda.core.crypto.keys
 import net.corda.core.crypto.toStringShort
+import net.corda.core.flows.FlowVersion
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.transactions.TransactionBuilder
 import net.corda.core.utilities.ProgressTracker
@@ -17,6 +18,7 @@ import java.util.*
  * @param amount the amount of a currency to pay to the recipient.
  * @param recipient the party to pay the currency to.
  */
+@FlowVersion("1.0", "CashPaymentFlow", arrayOf("1.0")) //todo cash flow
 open class CashPaymentFlow(val amount: Amount<Issued<Currency>>, val recipient: Party, progressTracker: ProgressTracker) : AbstractCashFlow(progressTracker) {
     constructor(amount: Amount<Issued<Currency>>, recipient: Party) : this(amount, recipient, tracker())
 

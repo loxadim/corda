@@ -4,6 +4,7 @@ import co.paralleluniverse.fibers.Suspendable
 import net.corda.core.contracts.DealState
 import net.corda.core.crypto.Party
 import net.corda.core.flows.FlowLogic
+import net.corda.core.flows.FlowVersion
 import net.corda.core.node.CordaPluginRegistry
 import net.corda.core.node.PluginServiceHub
 import net.corda.core.serialization.SingletonSerializeAsToken
@@ -40,8 +41,8 @@ object AutoOfferFlow {
         }
     }
 
+    @FlowVersion("1.0", "AutoOfferFlow", arrayOf("1.0"))
     class Requester(val dealToBeOffered: DealState) : FlowLogic<SignedTransaction>() {
-
         companion object {
             object RECEIVED : ProgressTracker.Step("Received API call")
             object DEALING : ProgressTracker.Step("Starting the deal flow") {

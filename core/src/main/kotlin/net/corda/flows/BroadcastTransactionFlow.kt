@@ -3,6 +3,7 @@ package net.corda.flows
 import co.paralleluniverse.fibers.Suspendable
 import net.corda.core.crypto.Party
 import net.corda.core.flows.FlowLogic
+import net.corda.core.flows.FlowVersion
 import net.corda.core.transactions.SignedTransaction
 
 
@@ -15,6 +16,7 @@ import net.corda.core.transactions.SignedTransaction
  * @param participants a list of participants involved in the transaction.
  * @return a list of participants who were successfully notified of the transaction.
  */
+@FlowVersion("1.0", "BroadcastTransactionFlow", arrayOf("1.0"))
 class BroadcastTransactionFlow(val notarisedTransaction: SignedTransaction,
                                val participants: Set<Party>) : FlowLogic<Unit>() {
     data class NotifyTxRequest(val tx: SignedTransaction)

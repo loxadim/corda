@@ -1,6 +1,5 @@
 package net.corda.testing.node
 
-import kotlinx.support.jdk8.collections.putIfAbsent
 import net.corda.core.contracts.Attachment
 import net.corda.core.contracts.PartyAndReference
 import net.corda.core.crypto.*

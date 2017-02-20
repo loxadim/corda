@@ -5,6 +5,7 @@ import net.corda.core.RetryableException
 import net.corda.core.contracts.*
 import net.corda.core.crypto.*
 import net.corda.core.flows.FlowLogic
+import net.corda.core.flows.FlowVersion
 import net.corda.core.math.CubicSplineInterpolator
 import net.corda.core.math.Interpolator
 import net.corda.core.math.InterpolatorFactory
@@ -75,6 +76,7 @@ object NodeInterestRates {
             services.registerFlowInitiator(RatesFixFlow.FixQueryFlow::class) { FixQueryHandler(it, this) }
         }
 
+        @FlowVersion("1.0", "FixSignFlow", arrayOf("1.0"))
         private class FixSignHandler(val otherParty: Party, val service: Service) : FlowLogic<Unit>() {
             @Suspendable
             override fun call() {
@@ -83,6 +85,7 @@ object NodeInterestRates {
             }
         }
 
+        @FlowVersion("1.0", "FixQueryFlow", arrayOf("1.0"))
         private class FixQueryHandler(val otherParty: Party, val service: Service) : FlowLogic<Unit>() {
             companion object {
                 object RECEIVED : ProgressTracker.Step("Received fix request")

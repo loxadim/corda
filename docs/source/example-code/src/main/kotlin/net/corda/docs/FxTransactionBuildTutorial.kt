@@ -11,6 +11,7 @@ import net.corda.core.crypto.Party
 import net.corda.core.crypto.SecureHash
 import net.corda.core.crypto.signWithECDSA
 import net.corda.core.flows.FlowLogic
+import net.corda.core.flows.FlowVersion
 import net.corda.core.node.PluginServiceHub
 import net.corda.core.node.ServiceHub
 import net.corda.core.transactions.SignedTransaction
@@ -100,11 +101,13 @@ private fun prepareOurInputsAndOutputs(serviceHub: ServiceHub, request: FxReques
 
 // A flow representing creating a transaction that
 // carries out exchange of cash assets.
+@FlowVersion("1.0", "ForeignExchangeFlow", arrayOf("1.0"))
 class ForeignExchangeFlow(val tradeId: String,
                           val baseCurrencyAmount: Amount<Issued<Currency>>,
                           val quoteCurrencyAmount: Amount<Issued<Currency>>,
                           val baseCurrencyBuyer: Party,
                           val baseCurrencySeller: Party) : FlowLogic<SecureHash>() {
+
     @Suspendable
     override fun call(): SecureHash {
         // Select correct sides of the Fx exchange to query for.
@@ -209,7 +212,9 @@ class ForeignExchangeFlow(val tradeId: String,
     // DOCEND 3
 }
 
+@FlowVersion("1.0", "ForeignExchangeFlow", arrayOf("1.0"))
 class ForeignExchangeRemoteFlow(val source: Party) : FlowLogic<Unit>() {
+
     @Suspendable
     override fun call() {
         // Initial receive from remote party
