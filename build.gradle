@@ -10,7 +10,7 @@ buildscript {
     // Dependency versions. Can run 'gradle dependencyUpdates' to find new versions of things.
     //
     // TODO: Sort this alphabetically.
-    ext.kotlin_version = '1.0.6'
+    ext.kotlin_version = '1.1.0-rc-91'
     ext.quasar_version = '0.7.6'    // TODO: Upgrade to 0.7.7+ when Quasar bug 238 is resolved.
     ext.asm_version = '0.5.3'
     ext.artemis_version = '1.5.1'
@@ -37,6 +37,9 @@ buildscript {
         mavenLocal()
         mavenCentral()
         jcenter()
+        maven {
+            url "http://dl.bintray.com/kotlin/kotlin-eap-1.1"
+        }
     }
     dependencies {
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
@@ -86,6 +89,12 @@ allprojects {
 
     group 'net.corda'
     version "$corda_version"
+
+    repositories {
+        maven {
+            url "http://dl.bintray.com/kotlin/kotlin-eap-1.1"
+        }
+    }
 }
 
 // Check that we are running on a Java 8 JDK. The source/targetCompatibility values above aren't sufficient to
