@@ -13,12 +13,14 @@ import net.corda.core.node.NodeInfo
 import net.corda.core.node.services.NetworkMapCache
 import net.corda.core.node.services.StateMachineTransactionMapping
 import net.corda.core.node.services.Vault
+import net.corda.core.serialization.CordaSerializable
 import net.corda.core.transactions.SignedTransaction
 import rx.Observable
 import java.io.InputStream
 import java.io.OutputStream
 import java.time.Instant
 
+@CordaSerializable
 data class StateMachineInfo(
         val id: StateMachineRunId,
         val flowLogicClassName: String,
@@ -26,9 +28,12 @@ data class StateMachineInfo(
 )
 
 sealed class StateMachineUpdate(val id: StateMachineRunId) {
+    @CordaSerializable
     class Added(val stateMachineInfo: StateMachineInfo) : StateMachineUpdate(stateMachineInfo.id) {
         override fun toString() = "Added($id, ${stateMachineInfo.flowLogicClassName})"
     }
+
+    @CordaSerializable
     class Removed(id: StateMachineRunId) : StateMachineUpdate(id) {
         override fun toString() = "Removed($id)"
     }
@@ -204,6 +209,7 @@ inline fun <T : Any, A, B, C, D, reified R : FlowLogic<T>> CordaRPCOps.startFlow
  * @param progress The stream of progress tracker events.
  * @param returnValue A [ListenableFuture] of the flow's return value.
  */
+@CordaSerializable
 data class FlowHandle<A>(
         val id: StateMachineRunId,
         val progress: Observable<String>,

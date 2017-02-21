@@ -2,11 +2,10 @@ package net.corda.core.transactions
 
 import net.corda.core.contracts.*
 import net.corda.core.crypto.*
-import net.corda.core.crypto.SecureHash.Companion.zeroHash
+import net.corda.core.serialization.CordaSerializable
 import net.corda.core.serialization.createKryo
 import net.corda.core.serialization.extendKryoHash
 import net.corda.core.serialization.serialize
-import java.util.*
 
 fun <T : Any> serializedHash(x: T): SecureHash {
     val kryo = extendKryoHash(createKryo()) // Dealing with HashMaps inside states.
@@ -53,6 +52,7 @@ interface TraversableTransaction {
  * Class that holds filtered leaves for a partial Merkle transaction. We assume mixed leaf types, notice that every
  * field from WireTransaction can be used in PartialMerkleTree calculation.
  */
+@CordaSerializable
 class FilteredLeaves(
         override val inputs: List<StateRef>,
         override val attachments: List<SecureHash>,
@@ -84,6 +84,7 @@ class FilteredLeaves(
  * @param filteredLeaves Leaves included in a filtered transaction.
  * @param partialMerkleTree Merkle branch needed to verify filteredLeaves.
  */
+@CordaSerializable
 class FilteredTransaction private constructor(
         val rootHash: SecureHash,
         val filteredLeaves: FilteredLeaves,
