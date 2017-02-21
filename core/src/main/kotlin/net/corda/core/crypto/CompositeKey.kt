@@ -136,12 +136,23 @@ sealed class CompositeKey {
     }
 
     /**
+     * Wrapper around a [CompositeKey] to allow it to be used as a [PublicKey], for example in
+     * [java.security.cert.Certificate] as a signing key on a certificate.
+     */
+    class Wrapper(val compositeKey: CompositeKey) : PublicKey {
+        override fun getAlgorithm(): String  = "X-Corda-Composite"
+        override fun getEncoded(): ByteArray = compositeKey.serialize().bytes
+        override fun getFormat(): String = "X-Kryo"
+    }
+
+    /**
      * Returns the enclosed [PublicKey] for a [CompositeKey] with a single leaf node
      *
      * @throws IllegalArgumentException if the [CompositeKey] contains more than one node
      */
     val singleKey: PublicKey
         get() = keys.singleOrNull() ?: throw IllegalStateException("The key is composed of more than one PublicKey primitive")
+    fun toPublicKey(): PublicKey = Wrapper(this)
 }
 
 /** Returns the set of all [PublicKey]s contained in the leaves of the [CompositeKey]s */
