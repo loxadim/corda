@@ -17,7 +17,7 @@ object NotaryChange {
      */
     class Service(services: PluginServiceHub) : SingletonSerializeAsToken() {
         init {
-            services.registerFlowInitiator(NotaryChangeFlow.Instigator::class) { NotaryChangeFlow.Acceptor(it) }
+            services.registerFlowInitiator(NotaryChangeFlow.Instigator::class, { NotaryChangeFlow.Acceptor(it) }) //todo add service + change counterparty marker
         }
     }
 }

@@ -102,7 +102,24 @@ object IssuerFlow {
 
         class Service(services: PluginServiceHub) {
             init {
-                services.registerFlowInitiator(IssuanceRequester::class, ::Issuer)
+//                services.registerFlowInitiator(IssuanceRequester::class, ::Issuer, ServiceType.corda.getSubType("issuer.USD")) // TODO think of that type
+                services.registerFlowInitiator(IssuerFlowFactory) // Now when we get "IssuerFlow" request, we fire up Issuer from IssuerFlowFactory depending on which version we want to speak.
+            }
+        }
+    }
+
+    // TODO example
+    object IssuerFlowFactory: FlowFactory {
+        override val preferred: String = "1.0"
+        override val deprecated: Array<String> = emptyArray() //TODO
+        override val toAdvertise: Boolean = true
+        override val genericFlowName: String = "IssuerFlow"
+
+        // It's easier that way of having backward compatibility
+        override fun getFlow(version: String, party: Party): FlowLogic<*>? {
+            return when (version) {
+                "1.0" -> Issuer(party)
+                else -> null
             }
         }
     }

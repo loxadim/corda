@@ -34,7 +34,7 @@ class BuyerFlow(val otherParty: Party,
                 it.automaticallyExtractAttachments = true
                 it.storePath
             }
-            services.registerFlowInitiator(SellerFlow::class) { BuyerFlow(it, attachmentsPath) }
+            services.registerFlowInitiator(SellerFlow::class, { BuyerFlow(it, attachmentsPath) })
         }
     }
 

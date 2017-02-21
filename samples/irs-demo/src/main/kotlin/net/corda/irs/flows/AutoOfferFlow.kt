@@ -37,7 +37,7 @@ object AutoOfferFlow {
         }
 
         init {
-            services.registerFlowInitiator(Instigator::class) { Acceptor(it) }
+            services.registerFlowInitiator(Instigator::class, { Acceptor(it) })
         }
     }
 

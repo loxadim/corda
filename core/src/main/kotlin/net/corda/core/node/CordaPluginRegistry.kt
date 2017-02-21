@@ -1,7 +1,9 @@
 package net.corda.core.node
 
 import com.esotericsoftware.kryo.Kryo
+import net.corda.core.flows.FlowVersionInfo
 import net.corda.core.messaging.CordaRPCOps
+import net.corda.core.node.services.ServiceType
 import java.util.function.Function
 
 /**
@@ -9,6 +11,9 @@ import java.util.function.Function
  * to extend a Corda node with additional application services.
  */
 abstract class CordaPluginRegistry(
+        open val serviceType: ServiceType = ServiceType.corda.getSubType("peer_node"), // TODO Override it for notaries, oracles...
+        // TODO In config we can specify which services we want to advertise and versions of them.
+
         /**
          * List of lambdas returning JAX-RS objects. They may only depend on the RPC interface, as the webserver should
          * potentially be able to live in a process separate from the node itself.
@@ -39,15 +44,15 @@ abstract class CordaPluginRegistry(
          */
         open val servicePlugins: List<Function<PluginServiceHub, out Any>> = emptyList()
 ) {
-        /**
-         * Optionally register types with [Kryo] for use over RPC, as we lock down the types that can be serialised in this
-         * particular use case.
-         * For example, if you add an RPC interface that carries some contract states back and forth, you need to register
-         * those classes here using the [register] method on Kryo.
-         *
-         * TODO: Kryo and likely the requirement to register classes here will go away when we replace the serialization implementation.
-         *
-         * @return true if you register types, otherwise you will be filtered out of the list of plugins considered in future.
-         */
-        open fun registerRPCKryoTypes(kryo: Kryo): Boolean = false
+    /**
+     * Optionally register types with [Kryo] for use over RPC, as we lock down the types that can be serialised in this
+     * particular use case.
+     * For example, if you add an RPC interface that carries some contract states back and forth, you need to register
+     * those classes here using the [register] method on Kryo.
+     *
+     * TODO: Kryo and likely the requirement to register classes here will go away when we replace the serialization implementation.
+     *
+     * @return true if you register types, otherwise you will be filtered out of the list of plugins considered in future.
+     */
+    open fun registerRPCKryoTypes(kryo: Kryo): Boolean = false
 }
