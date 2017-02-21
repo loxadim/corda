@@ -341,30 +341,16 @@ object Ed25519PublicKeySerializer : Serializer<EdDSAPublicKey>() {
     }
 }
 
-/** For serialising composite keys */
 @ThreadSafe
-object CompositeKeyLeafSerializer : Serializer<CompositeKey.Leaf>() {
-    override fun write(kryo: Kryo, output: Output, obj: CompositeKey.Leaf) {
-        val key = obj.publicKey
-        kryo.writeClassAndObject(output, key)
-    }
-
-    override fun read(kryo: Kryo, input: Input, type: Class<CompositeKey.Leaf>): CompositeKey.Leaf {
-        val key = kryo.readClassAndObject(input) as PublicKey
-        return CompositeKey.Leaf(key)
-    }
-}
-
-@ThreadSafe
-object CompositeKeyNodeSerializer : Serializer<CompositeKey.Node>() {
-    override fun write(kryo: Kryo, output: Output, obj: CompositeKey.Node) {
+object CompositeKeySerializer : Serializer<CompositeKey>() {
+    override fun write(kryo: Kryo, output: Output, obj: CompositeKey) {
         output.writeInt(obj.threshold)
         output.writeInt(obj.children.size)
         obj.children.forEach { kryo.writeClassAndObject(output, it) }
         output.writeInts(obj.weights.toIntArray())
     }
 
-    override fun read(kryo: Kryo, input: Input, type: Class<CompositeKey.Node>): CompositeKey.Node {
+    override fun read(kryo: Kryo, input: Input, type: Class<CompositeKey>): CompositeKey {
         val threshold = input.readInt()
         val childCount = input.readInt()
         val children = (1..childCount).map { kryo.readClassAndObject(input) as CompositeKey }
@@ -412,8 +398,7 @@ fun createKryo(k: Kryo = Kryo()): Kryo {
         register(Instant::class.java, ReferencesAwareJavaSerializer)
 
         // Using a custom serializer for compactness
-        register(CompositeKey.Node::class.java, CompositeKeyNodeSerializer)
-        register(CompositeKey.Leaf::class.java, CompositeKeyLeafSerializer)
+        register(CompositeKey::class.java, CompositeKeySerializer)
 
         // Some classes have to be handled with the ImmutableClassSerializer because they need to have their
         // constructors be invoked (typically for lazy members).
