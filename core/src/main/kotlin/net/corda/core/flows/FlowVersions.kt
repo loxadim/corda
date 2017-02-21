@@ -50,15 +50,14 @@ interface FlowFactory {
 }
 
 // Used when registering flow initiators
-// TODO Refactor that, can just register advertisedFlows -> make data class for storing that info (for extracting FlowLogic annotations).
 class FlowVersionInfo(
-        val genericFlowName: String,
-        val preferred: String, // With default genericFlowName/ highest version
-        val deprecated: Array<String> = emptyArray(),
+        val genericName: String,
+        val version: String, // With default genericFlowName/ highest version
+        val preference: Array<String> = emptyArray(),
         val advertise: Boolean = true // Do we want to advertise this flow.
 ) {
     init {
-        require(toFullList().all{ it.matches(versionRegex) }) { "Some of version information doesn't match format: major.minor for flow: $genericFlowName" }
+        require(toFullList().all{ it.matches(versionRegex) }) { "Some of version information doesn't match format: major.minor for flow: $genericName" }
     }
 
     companion object {
@@ -76,7 +75,7 @@ class FlowVersionInfo(
     }
 
     fun toFullList(): Array<String> {
-        return deprecated + preferred
+        return preference + version
     }
 
     fun isCompatible(flowVersion: String): Boolean = flowVersion in toFullList() // TODO refactor
@@ -84,22 +83,16 @@ class FlowVersionInfo(
     // TODO refactor
     @Throws(IllegalArgumentException::class)
     operator fun plus(other: FlowVersionInfo): FlowVersionInfo {
-        val newPreferred = listOf(this.preferred, other.preferred).sorted()
-        if (this.genericFlowName == other.genericFlowName)
+        val newPreferred = listOf(this.version, other.version).sorted()
+        if (this.genericName == other.genericName)
             return FlowVersionInfo(
-                    this.genericFlowName,
+                    this.genericName,
                     newPreferred[0],
-                    (this.deprecated + other.deprecated + newPreferred[1]).toSet().toTypedArray(),
+                    (this.preference + other.preference + newPreferred[1]).toSet().toTypedArray(),
                     this.advertise && other.advertise //todo advertise
             )
         else
             throw IllegalArgumentException("Cannot merge two different FlowVersionInfo entries.")
-    }
-
-    fun toAdvertisedFlows(): AdvertisedFlow? {
-        if (advertise)
-            return AdvertisedFlow(genericFlowName, preferred, deprecated)
-        else return null
     }
 }
 

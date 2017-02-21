@@ -10,9 +10,7 @@ import net.corda.core.contracts.Amount
 import net.corda.core.contracts.PartyAndReference
 import net.corda.core.crypto.Party
 import net.corda.core.crypto.X509Utilities
-import net.corda.core.flows.FlowLogic
-import net.corda.core.flows.FlowLogicRefFactory
-import net.corda.core.flows.FlowStateMachine
+import net.corda.core.flows.*
 import net.corda.core.messaging.RPCOps
 import net.corda.core.messaging.SingleMessageRecipient
 import net.corda.core.node.*
@@ -33,7 +31,7 @@ import net.corda.node.services.identity.InMemoryIdentityService
 import net.corda.node.services.keys.PersistentKeyManagementService
 import net.corda.node.services.network.InMemoryNetworkMapCache
 import net.corda.node.services.network.NetworkMapService
-import net.corda.node.services.network.NetworkMapService.Companion.REGISTER_FLOW_TOPIC
+import net.corda.node.services.network.NetworkMapService.Companion.REGISTER_PROTOCOL_TOPIC
 import net.corda.node.services.network.NetworkMapService.RegistrationResponse
 import net.corda.node.services.network.NodeRegistration
 import net.corda.node.services.network.PersistentNetworkMapService
@@ -104,7 +102,8 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
     // low-performance prototyping period.
     protected abstract val serverThread: AffinityExecutor
 
-    private val flowFactories = ConcurrentHashMap<Class<*>, (Party) -> FlowLogic<*>>()
+    // flowFactories are used to define which flows are able to communicate with us on a new incoming connection.
+    private val flowFactories = ConcurrentHashMap<String, (String, Party) -> FlowLogic<*>?>()
     protected val partyKeys = mutableSetOf<KeyPair>()
 
     val services = object : ServiceHubInternal() {
@@ -121,20 +120,65 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
 
         // Internal only
         override val monitoringService: MonitoringService = MonitoringService(MetricRegistry())
+
+        // Factory for flows registered through CordaPluginRegistry requiredFlows. Used for whitelisting.
         override val flowLogicRefFactory: FlowLogicRefFactory get() = flowLogicFactory
 
         override fun <T> startFlow(logic: FlowLogic<T>): FlowStateMachine<T> {
             return serverThread.fetchFrom { smm.add(logic) }
         }
 
-        override fun registerFlowInitiator(markerClass: KClass<*>, flowFactory: (Party) -> FlowLogic<*>) {
-            require(markerClass !in flowFactories) { "${markerClass.java.name} has already been used to register a flow" }
-            log.info("Registering flow ${markerClass.java.name}")
-            flowFactories[markerClass.java] = flowFactory
+        // In this kind of registration we assume that there is only one flow version on the node.
+        // For multiple versions we need to specify factory with metadata.
+        override fun registerFlowInitiator(markerClass: KClass<*>, flowFactory: (Party) -> FlowLogic<*>, serviceType: ServiceType) {
+            val info = FlowVersionInfo.getVersionAnnotation(markerClass.java)
+            require(info.genericName !in flowFactories) { "${info.genericName} has already been used to register a flow, markerClass used in registration: $markerClass" }
+            log.info("Registering marker ${markerClass} with flow name ${info.genericName}")
+            // This flow can speak with flows in certain range,
+            fun getVersion(version: String, party: Party): FlowLogic<*> {
+                return when(version) {
+                    in info.preference + info.version -> flowFactory(party) //TODO can be also as major match or on range.
+                    else -> throw IllegalArgumentException("Unsupported flow version $version") // TODO Flow exception handling.
+                }
+            }
+            flowFactories[info.genericName] = ::getVersion
+            if (info.advertise) { // Advertise only this flow.
+                val advFlow = AdvertisedFlow(
+                    info.genericName,
+                    info.version
+                )
+                inFlowVersions.merge(serviceType, mutableListOf(advFlow)) { x, y -> x + y }
+            }
         }
 
-        override fun getFlowFactory(markerClass: Class<*>): ((Party) -> FlowLogic<*>)? {
-            return flowFactories[markerClass]
+        override fun registerFlowInitiator(flowFactory: FlowFactory, serviceType: ServiceType) {
+            require(flowFactory.genericFlowName !in flowFactories) { "${flowFactory.genericFlowName} has already been used to register a flow" }
+            log.info("Registering flow ${flowFactory.genericFlowName}")
+            flowFactories[flowFactory.genericFlowName] = { v: String, p: Party -> flowFactory.getFlow(v, p) }
+            // TODO I need to store all of that metadata like that, if I want to have service - flows correspondence
+            if (flowFactory.toAdvertise) {
+                val advFlow = AdvertisedFlow(
+                        flowFactory.genericFlowName,
+                        flowFactory.preferred,
+                        flowFactory.deprecated
+                )
+                inFlowVersions.merge(serviceType, mutableListOf(advFlow)) { x, y -> x + y }
+            }
+        }
+
+        // TODO cleanup, this function is for compatibility with exisitng code
+        override fun getFlowFactory(markerClass: Class<*>): ((String, Party) -> FlowLogic<*>?)? {
+            if (markerClass.javaClass.isAssignableFrom(FlowLogic::class.java)) throw IllegalArgumentException("Trying to access something different than FlowLogic")
+            val info = FlowVersionInfo.getVersionAnnotation(markerClass)
+            return flowFactories[info.genericName]
+        }
+
+        // TODO We could go with passing markerClasses, but is it always an assumption that node has all flows in communication?
+        //  Especially with versioning, some nodes may not have given flow versions, but there still may be support (if changes are backward compatible).
+        //  Before markeClass was sent as string representation (markerClass.name) so there was no real type checking... I guess there is no good way of
+        //  handling it properly?
+        override fun getFlowFactory(flowName: String): ((String, Party) -> FlowLogic<*>?)? {
+            return flowFactories[flowName]
         }
 
         override fun recordTransactions(txs: Iterable<SignedTransaction>) {
@@ -155,10 +199,13 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
     var inNodeNetworkMapService: NetworkMapService? = null
     var inNodeNotaryService: NotaryService? = null
     var uniquenessProvider: UniquenessProvider? = null
+    val inFlowVersions: ConcurrentHashMap<ServiceType, List<AdvertisedFlow>> = ConcurrentHashMap()
+
     lateinit var identity: IdentityService
     lateinit var net: MessagingServiceInternal
     lateinit var netMapCache: NetworkMapCache
     lateinit var scheduler: NodeSchedulerService
+    // TODO It really needs different naming - we have flowLogicFactory, flowLogicRefFactory, flowFactories and in fact they are for different things.
     lateinit var flowLogicFactory: FlowLogicRefFactory
     lateinit var schemas: SchemaService
     val customServices: ArrayList<Any> = ArrayList()
@@ -207,8 +254,8 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
             schemas = makeSchemaService()
             vault = makeVaultService()
 
-            info = makeInfo()
             identity = makeIdentityService()
+            val legalIdentity = obtainLegalIdentity()
             // Place the long term identity key in the KMS. Eventually, this is likely going to be separated again because
             // the KMS is meant for derived temporary keys used in transactions, and we're not supposed to sign things with
             // the identity key. But the infrastructure to make that easy isn't here yet.
@@ -246,9 +293,8 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
                     MoreExecutors.shutdownAndAwaitTermination(serverThread as ExecutorService, 50, TimeUnit.SECONDS)
                 }
             }
-
             buildAdvertisedServices()
-
+            info = makeInfo(legalIdentity)
             // TODO: this model might change but for now it provides some de-coupling
             // Add vault observers
             CashBalanceAsMetricsObserver(services, database)
@@ -271,10 +317,11 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
         return this
     }
 
-    private fun makeInfo(): NodeInfo {
+    private fun makeInfo(legalIdentity: Party): NodeInfo {
+        val maybeFlows = inFlowVersions[ServiceType.corda.getSubType("peer_node")]
+        val advertisedPeerFlows = maybeFlows ?: emptyList()
         val advertisedServiceEntries = makeServiceEntries()
-        val legalIdentity = obtainLegalIdentity()
-        return NodeInfo(net.myAddress, legalIdentity, advertisedServiceEntries, findMyLocation())
+        return NodeInfo(net.myAddress, legalIdentity, advertisedServiceEntries, advertisedPeerFlows, findMyLocation())
     }
 
     /**
@@ -282,10 +329,15 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
      * taken from the configuration or, if non specified, generated by combining the node's legal name and the service id.
      */
     protected open fun makeServiceEntries(): List<ServiceEntry> {
+        // TODO NMS doesn't advertise flows, it's not a problem, because communication goes without session initiation (version discovery is there).
         return advertisedServices.map {
+            // TODO It's hack for now, because there is no correspondence between advertised service in configs  and what actually is kept on node (as plugin, flows, whatever).
+            //  That causes problems even in situation when we would like to version just services/plugins as a whole.
+            val maybeFlows = inFlowVersions[it.type] ?: emptyList()
             val serviceId = it.type.id
             val serviceName = it.name ?: "$serviceId|${configuration.myLegalName}"
             val identity = obtainKeyPair(configuration.baseDirectory, serviceId + "-private-key", serviceId + "-public", serviceName).first
+            it.advertisedFlows += maybeFlows
             ServiceEntry(it, identity)
         }
     }
@@ -325,7 +377,6 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
 
     private fun initialiseFlowLogicFactory(): FlowLogicRefFactory {
         val flowWhitelist = HashMap<String, Set<String>>()
-
         for ((flowClass, extraArgumentTypes) in defaultFlowWhiteList) {
             val argumentWhitelistClassNames = HashSet(extraArgumentTypes.map { it.name })
             flowClass.constructors.forEach {
@@ -333,13 +384,11 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
             }
             flowWhitelist.merge(flowClass.name, argumentWhitelistClassNames, { x, y -> x + y })
         }
-
         for (plugin in pluginRegistries) {
             for ((className, classWhitelist) in plugin.requiredFlows) {
                 flowWhitelist.merge(className, classWhitelist, { x, y -> x + y })
             }
         }
-
         return FlowLogicRefFactory(flowWhitelist)
     }
 
@@ -363,7 +412,7 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
     }
 
     private fun buildAdvertisedServices() {
-        val serviceTypes = info.advertisedServices.map { it.info.type }
+        val serviceTypes = advertisedServices.map { it.type }
         if (NetworkMapService.type in serviceTypes) makeNetworkMapService()
 
         val notaryServiceType = serviceTypes.singleOrNull { it.isNotary() }
@@ -408,7 +457,7 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
         val reg = NodeRegistration(info, instant.toEpochMilli(), ADD, expires)
         val legalIdentityKey = obtainLegalIdentityKey()
         val request = NetworkMapService.RegistrationRequest(reg.toWire(legalIdentityKey.private), net.myAddress)
-        return net.sendRequest(REGISTER_FLOW_TOPIC, request, networkMapAddress)
+        return net.sendRequest(REGISTER_PROTOCOL_TOPIC, request, networkMapAddress)
     }
 
     /** This is overriden by the mock node implementation to enable operation without any network map service */
