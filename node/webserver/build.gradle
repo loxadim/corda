@@ -73,3 +73,8 @@ task integrationTest(type: Test) {
     testClassesDir = sourceSets.integrationTest.output.classesDir
     classpath = sourceSets.integrationTest.runtimeClasspath
 }
+
+publish {
+    name = 'corda-webserver'
+    publishWar = true
+}
