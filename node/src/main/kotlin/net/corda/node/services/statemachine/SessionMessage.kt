@@ -11,11 +11,11 @@ interface ExistingSessionMessage : SessionMessage {
     val recipientSessionId: Long
 }
 
-data class SessionInit(val initiatorSessionId: Long, val flowName: String, val firstPayload: Any?) : SessionMessage
+data class SessionInit(val initiatorSessionId: Long, val flowName: String, val version: String, val firstPayload: Any?) : SessionMessage
 
 interface SessionInitResponse : ExistingSessionMessage
 
-data class SessionConfirm(val initiatorSessionId: Long, val initiatedSessionId: Long) : SessionInitResponse {
+data class SessionConfirm(val initiatorSessionId: Long, val initiatedSessionId: Long, val flowName: String, val version: String) : SessionInitResponse {
     override val recipientSessionId: Long get() = initiatorSessionId
 }
 

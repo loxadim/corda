@@ -137,7 +137,7 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
             // This flow can speak with flows in certain range,
             fun getVersion(version: String, party: Party): FlowLogic<*> {
                 return when(version) {
-                    in info.preference + info.version -> flowFactory(party) //TODO can be also as major match or on range.
+                    in info.preference + info.version -> flowFactory(party) //TODO can be also as major match or on range, but you can do it by registering factory.
                     else -> throw IllegalArgumentException("Unsupported flow version $version") // TODO Flow exception handling.
                 }
             }
