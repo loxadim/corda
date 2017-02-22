@@ -1,15 +1,14 @@
 package net.corda.node.services.vault
 
-import com.google.common.collect.Sets
-import kotlinx.support.jdk8.collections.getOrDefault
 import io.requery.TransactionIsolation
 import io.requery.kotlin.`in`
 import io.requery.kotlin.eq
+import io.requery.kotlin.isNull
+import io.requery.kotlin.ne
 import net.corda.contracts.asset.Cash
 import net.corda.core.ThreadBox
 import net.corda.core.bufferUntilSubscribed
 import net.corda.core.contracts.*
-import net.corda.core.crypto.AbstractParty
 import net.corda.core.crypto.AnonymousParty
 import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.SecureHash
@@ -33,6 +32,8 @@ import net.corda.node.utilities.wrapWithDatabaseTransaction
 import rx.Observable
 import rx.subjects.PublishSubject
 import java.security.PublicKey
+import java.sql.SQLException
+import java.time.Instant
 import java.util.*
 
 /**
@@ -56,9 +57,6 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
     val session = configuration.sessionForModel(Models.VAULT)
 
     private val mutex = ThreadBox(content = object {
-
-        // TODO: this should also be a persistent structure
-        val softLockedStates = mutableMapOf<UUID, Collection<StateRef>>()
 
         val _updatesPublisher = PublishSubject.create<Vault.Update>()
         val _rawUpdatesPublisher = PublishSubject.create<Vault.Update>()
@@ -158,15 +156,17 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
         }
     }
 
-    override fun <T: ContractState> states(clazzes: Set<Class<T>>, statuses: EnumSet<Vault.StateStatus>): List<StateAndRef<T>> {
+    override fun <T: ContractState> states(clazzes: Set<Class<T>>, statuses: EnumSet<Vault.StateStatus>, includeSoftLockedStates: Boolean): List<StateAndRef<T>> {
         val stateAndRefs =
             session.withTransaction(TransactionIsolation.REPEATABLE_READ) {
-                var result = select(VaultSchema.VaultStates::class)
+                var query = select(VaultSchema.VaultStates::class)
                                 .where(VaultSchema.VaultStates::stateStatus `in` statuses)
                 // TODO: temporary fix to continue supporting track() function (until becomes Typed)
                 if (!clazzes.map {it.name}.contains(ContractState::class.java.name))
-                    result.and (VaultSchema.VaultStates::contractStateClassName `in` (clazzes.map { it.name }))
-                result.get()
+                    query.and (VaultSchema.VaultStates::contractStateClassName `in` (clazzes.map { it.name }))
+                if (!includeSoftLockedStates)
+                    query.and(VaultSchema.VaultStates::lockId.isNull())
+                query.get()
                         .map { it ->
                             val stateRef = StateRef(SecureHash.parse(it.txId), it.index)
                             // TODO: revisit Kryo bug when using THREAD_LOCAL_KYRO
@@ -227,35 +227,77 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
 
     override fun softLockReserve(id: UUID, stateRefs: Set<StateRef>) {
         if (stateRefs.isNotEmpty()) {
-            mutex.locked {
-                softLockedStates.getOrPut(key = id, defaultValue = { emptyList<StateRef>() })
-                softLockedStates.put(id, stateRefs)
-                if (softLockedStates.isNotEmpty())
+            val stateRefsAsStr = stateRefs.fold("") { stateRefsAsStr, it -> stateRefsAsStr + "('${it.txhash}','${it.index}')," }.dropLast(1)
+            val updateStatement = """
+                UPDATE VAULT_STATES SET lock_id = '$id', lock_timestamp = '${Instant.now()}' WHERE ((transaction_id, output_index) IN ($stateRefsAsStr));
+            """
+            try {
+                val statement = configuration.jdbcSession().createStatement()
+                val rs = statement.executeUpdate(updateStatement)
+                if (rs > 0) {
                     log.info("Reserving soft lock states for $id: $stateRefs")
+                }
+            }
+            catch (e: SQLException) {
+                log.error("soft lock update error: $e.")
             }
         }
     }
 
     override fun softLockRelease(id: UUID, stateRefs: Set<StateRef>?) {
-        mutex.locked {
-            softLockedStates[id]?.let {
-                stateRefs?.let {
-                    val states = softLockedStates[id]
-                    if (stateRefs.isNotEmpty()) {
-                        states?.let {
-                            log.info("Releasing ${stateRefs.count()} soft locked states for $id: $stateRefs")
-                            states.minus(stateRefs)
-                        }
+        stateRefs?.let {
+            if (stateRefs.isNotEmpty()) {
+                val stateRefsAsStr = stateRefs.fold("") { stateRefsAsStr, it -> stateRefsAsStr + "('${it.txhash}','${it.index}')," }.dropLast(1)
+                val updateStatement = """
+                    UPDATE VAULT_STATES SET lock_id = null, lock_timestamp = '${Instant.now()}' WHERE ((transaction_id, output_index) IN ($stateRefsAsStr));
+                """
+                try {
+                    val statement = configuration.jdbcSession().createStatement()
+                    val rs = statement.executeUpdate(updateStatement)
+                    if (rs > 0) {
+                        log.info("Releasing ${stateRefs.count()} soft locked states for $id: $stateRefs")
                     }
-                    else {
-                        states?.let {
-                            log.info("Releasing all soft locked states for $id: ${softLockedStates[id]}")
-                            softLockedStates.remove(id)
-                        }
-                    }
+                } catch (e: SQLException) {
+                    log.error("soft lock update error: $e")
                 }
             }
         }
+
+        if (stateRefs == null) {
+            val updateStatement = """
+                    UPDATE VAULT_STATES SET lock_id = null, lock_timestamp = '${Instant.now()}' WHERE (lock_id = '$id');
+                """
+            try {
+                val statement = configuration.jdbcSession().createStatement()
+                val rs = statement.executeUpdate(updateStatement)
+                if (rs > 0) {
+                    log.info("Releasing all soft locked states for $id") //: ${softLockedStates[id]}")
+                }
+            } catch (e: SQLException) {
+                log.error("soft lock update error: $e")
+            }
+        }
+    }
+
+    override fun <T : ContractState> softLockedStates(lockId: UUID?): List<StateAndRef<T>> {
+        val stateAndRefs =
+                session.withTransaction(TransactionIsolation.REPEATABLE_READ) {
+                    var query = select(VaultSchema.VaultStates::class)
+                            .where(VaultSchema.VaultStates::stateStatus eq Vault.StateStatus.UNCONSUMED)
+                            .and(VaultSchema.VaultStates::contractStateClassName eq Cash.State::class.java.name)
+                    if (lockId != null)
+                        query.and(VaultSchema.VaultStates::lockId eq lockId.toString())
+                    else
+                        query.and(VaultSchema.VaultStates::lockId ne "")
+                    query.get()
+                            .map { it ->
+                                val stateRef = StateRef(SecureHash.parse(it.txId), it.index)
+                                // TODO: revisit Kryo bug when using THREAD_LOCAL_KYRO
+                                val state = it.contractState.deserialize<TransactionState<T>>(createKryo())
+                                StateAndRef(state, stateRef)
+                            }.toList()
+                }
+        return stateAndRefs
     }
 
     /**
@@ -309,21 +351,14 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
         var gatheredAmount: Amount<Currency> = Amount(0, USD)
         mutex.locked {
             // exclude soft locked states reserved by others
-            val softLockStatesForRefs = statesForRefs(softLockedStates.flatMap { it.value })
-            val softLockStatesAndRefs = softLockStatesForRefs.map {
-                StateAndRef(it.value as TransactionState<Cash.State>, it.key)
-            }
-            softLockStatesAndRefs.forEach { log.info("Excluding soft lock states for ${tx.lockId}: ${it.ref}") }
-            acceptableCoins = acceptableCoins.minus(softLockStatesAndRefs)
+            val softLockedStates = softLockedStates<Cash.State>()
+            softLockedStates.forEach { log.info("Excluding soft lock states for ${tx.lockId}: ${it.ref}") }
+            acceptableCoins = acceptableCoins.minus(softLockedStates)
 
             // include soft locked states reserved by me
-            val mySoftLockedStates = softLockedStates.getOrDefault(tx.lockId, emptyList())
-            val mySoftLockStatesForRefs = statesForRefs(mySoftLockedStates.toList())
-            val mySoftLockStatesAndRefs = mySoftLockStatesForRefs.map {
-                StateAndRef(it.value as TransactionState<Cash.State>, it.key)
-            }
-            mySoftLockStatesAndRefs.forEach { log.info("Including soft lock states for ${tx.lockId}: ${it.ref}") }
-            acceptableCoins = acceptableCoins.plus(mySoftLockStatesAndRefs)
+            val mySoftLockedStates = softLockedStates<Cash.State>(tx.lockId)
+            mySoftLockedStates.forEach { log.info("Including soft lock states for ${tx.lockId}: ${it.ref}") }
+            acceptableCoins = acceptableCoins.plus(mySoftLockedStates)
 
             val gatheredCoins = gatherCoins(acceptableCoins, amount)
             gathered = gatheredCoins.first

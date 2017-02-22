@@ -201,16 +201,40 @@ interface VaultService {
 
     /**
      * Return [ContractState]s of a given [Contract] type and list of [Vault.StateStatus]
+     * Optionally may specify whether to include [StateRef] that have been marked as soft locked (default is true)
      */
-    fun <T : ContractState> states(clazzes: Set<Class<T>>, statuses: EnumSet<Vault.StateStatus>): List<StateAndRef<T>>
+    fun <T : ContractState> states(clazzes: Set<Class<T>>, statuses: EnumSet<Vault.StateStatus>, includeSoftLockedStates: Boolean = true): List<StateAndRef<T>>
 
-    fun  softLockReserve(id: UUID, stateRefs: Set<StateRef>)
+    /**
+     * Soft locking is used to prevent multiple transactions trying to use the same output simultaneously.
+     * Violation of a soft lock would result in a double spend being created and rejected by the notary.
+     */
 
-    fun  softLockRelease(id: UUID, stateRefs: Set<StateRef>? = null)
+    /**
+     * Reserve a set of [StateRef] for a given [UUID] unique identifier.
+     * Typically, the unique identifier will refer to a Flow id associated with a [Transaction] in an in-flight flow.
+     * In the case of Coin Selection, soft locks are automatically taken upon gathering relevant unconsumed input refs.
+     */
+    fun softLockReserve(id: UUID, stateRefs: Set<StateRef>)
+
+    /**
+     * Release all or an explicitly specified set of [StateRef] for a given [UUID] unique identifier.
+     * A vault soft lock manager is automatically notified of a Flows that are terminated, such that any soft locked states
+     * may be released.
+     * In the case of Coin Selection, soft locks are automatically released once previously gathered unconsumed input refs
+     * are consumed as part of cash spending.
+     */
+    fun softLockRelease(id: UUID, stateRefs: Set<StateRef>? = null)
+
+    /**
+     * Retrieve softLockStates for a given [UUID] or return all softLockStates in vault for a given
+     * [ContractState] type
+     */
+    fun <T : ContractState> softLockedStates(lockId: UUID? = null): List<StateAndRef<T>>
 }
 
-inline fun <reified T: ContractState> VaultService.unconsumedStates(): List<StateAndRef<T>> =
-        states(setOf(T::class.java), EnumSet.of(Vault.StateStatus.UNCONSUMED))
+inline fun <reified T: ContractState> VaultService.unconsumedStates(includeSoftLockedStates: Boolean = true): List<StateAndRef<T>> =
+        states(setOf(T::class.java), EnumSet.of(Vault.StateStatus.UNCONSUMED), includeSoftLockedStates)
 
 inline fun <reified T: ContractState> VaultService.consumedStates(): List<StateAndRef<T>> =
         states(setOf(T::class.java), EnumSet.of(Vault.StateStatus.CONSUMED))

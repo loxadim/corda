@@ -2,6 +2,7 @@ package net.corda.node.services.vault.schemas
 
 import io.requery.Persistable
 import io.requery.TransactionIsolation
+import io.requery.kotlin.`in`
 import io.requery.kotlin.eq
 import io.requery.kotlin.invoke
 import io.requery.rx.KotlinRxEntityStore
@@ -526,5 +527,143 @@ class VaultSchemaTest {
             while (rs.next()) count++
             assertEquals(3, count)
         }
+    }
+
+    @Test
+    fun testSingleSoftLockUpdate() {
+
+        // insert unconsumed state
+        val stateEntity = createStateEntity(transaction!!.inputs[0])
+        data.invoke {
+            upsert(stateEntity)
+        }
+
+        // reserve soft lock on state
+        stateEntity.apply {
+            this.lockId = "LOCK#1"
+            this.lockUpdateTime = Instant.now()
+            data.invoke {
+                upsert(stateEntity)
+            }
+        }
+
+        // select unlocked states
+        data.invoke {
+            val result = select(VaultSchema.VaultStates::class) where (VaultSchema.VaultStates::txId eq stateEntity.txId)
+                                                                .and (VaultSchema.VaultStates::lockId eq "")
+            assertEquals(0, result.get().count())
+        }
+
+        // release soft lock on state
+        stateEntity.apply {
+            data.invoke {
+                val query = select(VaultSchema.VaultStates::class) where (VaultSchema.VaultStates::txId eq stateEntity.txId)
+                                                                    .and(VaultSchema.VaultStates::lockId eq "LOCK#1")
+                val result = query.get()
+                assertEquals(1, result.count())
+                val stateEntity = result.first()
+                stateEntity.lockId = ""
+                stateEntity.lockUpdateTime = Instant.now()
+                upsert(stateEntity)
+            }
+        }
+
+        // select unlocked states
+        data.invoke {
+            val result = select(VaultSchema.VaultStates::class) where (VaultSchema.VaultStates::txId eq stateEntity.txId)
+                    .and (VaultSchema.VaultStates::lockId eq "")
+            assertEquals(1, result.get().count())
+        }
+    }
+
+    @Test
+    fun testMultipleSoftLocksUpdate() {
+
+        // insert unconsumed state
+        data.withTransaction(TransactionIsolation.REPEATABLE_READ) {
+            transaction!!.inputs.forEach {
+                val stateEntity = createStateEntity(it)
+                insert(stateEntity)
+            }
+            val result = select(VaultSchema.VaultStates::class)
+            Assert.assertSame(3, result().toList().size)
+        }
+
+        // reserve soft locks on states
+        transaction!!.inputs.forEach {
+            val stateEntity = createStateEntity(it)
+            stateEntity.apply {
+                this.lockId = "LOCK#1"
+                this.lockUpdateTime = Instant.now()
+                data.invoke {
+                    upsert(stateEntity)
+                }
+            }
+        }
+
+        // select unlocked states
+        val txnIds = transaction!!.inputs.map { it.ref.txhash.toString() }.toSet()
+        data.invoke {
+            val result = select(VaultSchema.VaultStates::class) where (VaultSchema.VaultStates::txId `in` txnIds)
+                    .and (VaultSchema.VaultStates::lockId eq "")
+            assertEquals(0, result.get().count())
+        }
+
+        // release soft lock on states
+        data.invoke {
+            val query = select(VaultSchema.VaultStates::class) where (VaultSchema.VaultStates::txId `in` txnIds)
+                    .and(VaultSchema.VaultStates::lockId eq "LOCK#1")
+            val result = query.get()
+            assertEquals(3, result.count())
+            result.forEach {
+                it.lockId = ""
+                it.lockUpdateTime = Instant.now()
+                upsert(it)
+            }
+        }
+
+        // select unlocked states
+        data.invoke {
+            val result = select(VaultSchema.VaultStates::class) where (VaultSchema.VaultStates::txId `in` txnIds)
+                    .and (VaultSchema.VaultStates::lockId eq "")
+            assertEquals(3, result.get().count())
+        }
+    }
+
+    @Test
+    fun testMultipleSoftLocksUsingNativeJDBC() {
+        // NOTE:
+        //      - Requery using raw SelectForUpdate not working
+        //      - Requery using raw Update not working
+
+        // using native JDBC
+        val refs = transaction!!.inputs.map { it.ref }
+
+        // insert unconsumed state
+        data.invoke {
+            transaction!!.inputs.forEach {
+                val stateEntity = createStateEntity(it)
+                insert(stateEntity)
+            }
+        }
+
+        // update refs with soft lock id
+        val stateRefs = refs.fold("") { stateRefs, it -> stateRefs + "('${it.txhash}','${it.index}')," }.dropLast(1)
+        val lockId = "LOCK#1"
+        val updateStatement = """
+            UPDATE VAULT_STATES SET lock_id = '$lockId', lock_timestamp = '${Instant.now()}' WHERE ((transaction_id, output_index) IN ($stateRefs));
+        """
+        val statement = jdbcConn.createStatement()
+        statement.executeUpdate(updateStatement)
+
+        // count locked state refs
+        val selectStatement = """
+            SELECT transaction_id, output_index, contract_state FROM VAULT_STATES
+            WHERE ((transaction_id, output_index) IN ($stateRefs)) AND (lock_id != '')
+        """
+        val rsQuery = statement.executeQuery(selectStatement)
+        var countQuery = 0
+        while (rsQuery.next()) countQuery++
+        assertEquals(3, countQuery)
     }
 }

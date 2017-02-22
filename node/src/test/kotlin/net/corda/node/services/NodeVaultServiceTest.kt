@@ -14,6 +14,7 @@ import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.DUMMY_NOTARY
 import net.corda.core.utilities.LogHelper
 import net.corda.node.services.vault.NodeVaultService
+import net.corda.node.services.vault.schemas.VaultSchema
 import net.corda.node.utilities.configureDatabase
 import net.corda.node.utilities.databaseTransaction
 import net.corda.testing.MEGA_CORP
@@ -108,6 +109,54 @@ class NodeVaultServiceTest {
             val stateRefs = listOf(w1[1].ref, w1[2].ref)
             val states = services1.vaultService.statesForRefs(stateRefs)
             assertThat(states).hasSize(2)
+        }
+    }
+
+    @Test
+    fun `states soft locking reserve and release`() {
+        databaseTransaction(database) {
+            val services1 = object : MockServices() {
+                override val vaultService: VaultService = NodeVaultService(this, dataSourceProps)
+
+                override fun recordTransactions(txs: Iterable<SignedTransaction>) {
+                    for (stx in txs) {
+                        storageService.validatedTransactions.addTransaction(stx)
+                        vaultService.notify(stx.tx)
+                    }
+                }
+            }
+            services1.fillWithSomeTestCash(100.DOLLARS, DUMMY_NOTARY, 3, 3, Random(0L))
+
+            val unconsumedStates = services1.vaultService.unconsumedStates<Cash.State>()
+            assertThat(unconsumedStates).hasSize(3)
+
+            val stateRefsToSoftLock = setOf(unconsumedStates[1].ref, unconsumedStates[2].ref)
+
+            // soft lock two of the three states
+            val softLockId = UUID.randomUUID()
+            services1.vaultService.softLockReserve(softLockId, stateRefsToSoftLock)
+
+            // all softlocked states
+            assertThat(services1.vaultService.softLockedStates<Cash.State>()).hasSize(2)
+            // my softlocked states
+            assertThat(services1.vaultService.softLockedStates<Cash.State>(softLockId)).hasSize(2)
+
+            // excluding softlocked states
+            val unlockedStates1 = services1.vaultService.unconsumedStates<Cash.State>(includeSoftLockedStates = false)
+            assertThat(unlockedStates1).hasSize(1)
+
+            // soft lock release one of the states explicitly
+            services1.vaultService.softLockRelease(softLockId, setOf(unconsumedStates[1].ref))
+            val unlockedStates2 = services1.vaultService.unconsumedStates<Cash.State>(includeSoftLockedStates = false)
+            assertThat(unlockedStates2).hasSize(2)
+
+            // soft lock release the rest by id
+            services1.vaultService.softLockRelease(softLockId)
+            val unlockedStates = services1.vaultService.unconsumedStates<Cash.State>(includeSoftLockedStates = false)
+            assertThat(unlockedStates).hasSize(3)
+
+            // should be back to original states
+            assertThat(unconsumedStates).isEqualTo(unlockedStates)
         }
     }
 
