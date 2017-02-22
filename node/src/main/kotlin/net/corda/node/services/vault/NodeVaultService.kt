@@ -1,10 +1,7 @@
 package net.corda.node.services.vault
 
 import io.requery.TransactionIsolation
-import io.requery.kotlin.`in`
-import io.requery.kotlin.eq
-import io.requery.kotlin.isNull
-import io.requery.kotlin.ne
+import io.requery.kotlin.*
 import net.corda.contracts.asset.Cash
 import net.corda.core.ThreadBox
 import net.corda.core.bufferUntilSubscribed
@@ -33,7 +30,6 @@ import rx.Observable
 import rx.subjects.PublishSubject
 import java.security.PublicKey
 import java.sql.SQLException
-import java.time.Instant
 import java.util.*
 
 /**
@@ -94,6 +90,12 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
                         state?.run {
                             stateStatus = Vault.StateStatus.CONSUMED
                             consumedTime = services.clock.instant()
+                            // remove lock (if held)
+//                            lockId?.let {
+//                                lockId = null
+//                                lockUpdateTime = services.clock.instant()
+//                                log.info("Releasing soft lock state: $stateRef")
+//                            }
                             update(state)
                         }
                     }
@@ -229,7 +231,7 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
         if (stateRefs.isNotEmpty()) {
             val stateRefsAsStr = stateRefs.fold("") { stateRefsAsStr, it -> stateRefsAsStr + "('${it.txhash}','${it.index}')," }.dropLast(1)
             val updateStatement = """
-                UPDATE VAULT_STATES SET lock_id = '$id', lock_timestamp = '${Instant.now()}' WHERE ((transaction_id, output_index) IN ($stateRefsAsStr));
+                UPDATE VAULT_STATES SET lock_id = '$id', lock_timestamp = '${services.clock.instant()}' WHERE ((transaction_id, output_index) IN ($stateRefsAsStr));
             """
             try {
                 val statement = configuration.jdbcSession().createStatement()
@@ -239,7 +241,9 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
                 }
             }
             catch (e: SQLException) {
-                log.error("soft lock update error: $e.")
+                log.error("""soft lock update error attempting to reserve states: $stateRefs for $id
+                            $e.
+                        """)
             }
         }
     }
@@ -249,7 +253,7 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
             if (stateRefs.isNotEmpty()) {
                 val stateRefsAsStr = stateRefs.fold("") { stateRefsAsStr, it -> stateRefsAsStr + "('${it.txhash}','${it.index}')," }.dropLast(1)
                 val updateStatement = """
-                    UPDATE VAULT_STATES SET lock_id = null, lock_timestamp = '${Instant.now()}' WHERE ((transaction_id, output_index) IN ($stateRefsAsStr));
+                    UPDATE VAULT_STATES SET lock_id = null, lock_timestamp = '${services.clock.instant()}' WHERE ((transaction_id, output_index) IN ($stateRefsAsStr));
                 """
                 try {
                     val statement = configuration.jdbcSession().createStatement()
@@ -258,14 +262,16 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
                         log.info("Releasing ${stateRefs.count()} soft locked states for $id: $stateRefs")
                     }
                 } catch (e: SQLException) {
-                    log.error("soft lock update error: $e")
+                    log.error("""soft lock update error attempting to release states: $stateRefs for $id
+                            $e.
+                        """)
                 }
             }
         }
 
         if (stateRefs == null) {
             val updateStatement = """
-                    UPDATE VAULT_STATES SET lock_id = null, lock_timestamp = '${Instant.now()}' WHERE (lock_id = '$id');
+                    UPDATE VAULT_STATES SET lock_id = null, lock_timestamp = '${services.clock.instant()}' WHERE (lock_id = '$id');
                 """
             try {
                 val statement = configuration.jdbcSession().createStatement()
@@ -274,7 +280,9 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
                     log.info("Releasing all soft locked states for $id") //: ${softLockedStates[id]}")
                 }
             } catch (e: SQLException) {
-                log.error("soft lock update error: $e")
+                log.error("""soft lock update error attempting to release all states for $id
+                            $e.
+                        """)
             }
         }
     }
@@ -286,9 +294,9 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
                             .where(VaultSchema.VaultStates::stateStatus eq Vault.StateStatus.UNCONSUMED)
                             .and(VaultSchema.VaultStates::contractStateClassName eq Cash.State::class.java.name)
                     if (lockId != null)
-                        query.and(VaultSchema.VaultStates::lockId eq lockId.toString())
+                        query.and(VaultSchema.VaultStates::lockId eq lockId)
                     else
-                        query.and(VaultSchema.VaultStates::lockId ne "")
+                        query.and(VaultSchema.VaultStates::lockId.notNull())
                     query.get()
                             .map { it ->
                                 val stateRef = StateRef(SecureHash.parse(it.txId), it.index)
@@ -466,6 +474,8 @@ class NodeVaultService(private val services: ServiceHub, dataSourceProperties: P
             log.trace { "tx ${tx.id} was irrelevant to this vault, ignoring" }
             return Vault.NoUpdate
         }
+
+        // Note: could move to point of finality - which is consumed state update itself!!!
         softLockRelease(tx.lockId, consumedStates.map { it.ref }.toSet())
 
         return Vault.Update(consumedStates, ourNewStates.toHashSet())
