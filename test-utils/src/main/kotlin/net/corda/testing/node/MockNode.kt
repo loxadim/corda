@@ -15,6 +15,7 @@ import net.corda.core.node.ServiceEntry
 import net.corda.core.node.services.*
 import net.corda.core.utilities.DUMMY_NOTARY_KEY
 import net.corda.core.utilities.loggerFor
+import net.corda.flows.ResolveTransactionsFlow
 import net.corda.node.internal.AbstractNode
 import net.corda.node.services.api.MessagingServiceInternal
 import net.corda.node.services.config.NodeConfiguration
@@ -36,6 +37,7 @@ import java.security.KeyPair
 import java.util.*
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.function.Function
 
 /**
  * A mock node brings up a suite of in-memory services in a fast manner suitable for unit testing.
@@ -149,7 +151,7 @@ class MockNetwork(private val networkSendManuallyPumped: Boolean = false,
             return mockNet.messagingNetwork.createNodeWithID(!mockNet.threadPerNode, id, serverThread, makeServiceEntries(), configuration.myLegalName, database).start().getOrThrow()
         }
 
-        override fun makeIdentityService() = MockIdentityService(mockNet.identities)
+        override fun makeIdentityService(legalIdentity: Party) = MockIdentityService(mockNet.identities)
 
         override fun makeVaultService(): VaultService = NodeVaultService(services)
 
@@ -301,7 +303,7 @@ class MockNetwork(private val networkSendManuallyPumped: Boolean = false,
      * Sets up a two node network, in which the first node runs network map and notary services and the other
      * doesn't.
      */
-    fun createTwoNodes(nodeFactory: Factory = defaultFactory, notaryKeyPair: KeyPair? = null): Pair<MockNode, MockNode> {
+    fun createTwoNodes(nodeFactory: Factory = defaultFactory, notaryKeyPair: KeyPair? = null, start: Boolean = true): Pair<MockNode, MockNode> {
         require(nodes.isEmpty())
         val notaryServiceInfo = ServiceInfo(SimpleNotaryService.type)
         val notaryOverride = if (notaryKeyPair != null)
@@ -309,8 +311,8 @@ class MockNetwork(private val networkSendManuallyPumped: Boolean = false,
         else
             null
         return Pair(
-                createNode(null, -1, nodeFactory, true, null, notaryOverride, BigInteger.valueOf(random63BitValue()), ServiceInfo(NetworkMapService.type), notaryServiceInfo),
-                createNode(nodes[0].info.address, -1, nodeFactory, true, null)
+                createNode(null, -1, nodeFactory, start, null, notaryOverride, BigInteger.valueOf(random63BitValue()), ServiceInfo(NetworkMapService.type), notaryServiceInfo),
+                createNode(nodes[0].info.address, -1, nodeFactory, start, null)
         )
     }
 
@@ -351,8 +353,9 @@ class MockNetwork(private val networkSendManuallyPumped: Boolean = false,
 
     fun createPartyNode(networkMapAddr: SingleMessageRecipient,
                         legalName: String? = null,
-                        overrideServices: Map<ServiceInfo, KeyPair>? = null): MockNode {
-        return createNode(networkMapAddr, -1, defaultFactory, true, legalName, overrideServices)
+                        overrideServices: Map<ServiceInfo, KeyPair>? = null,
+                        start: Boolean = true): MockNode { // TODO Silly workaround of registering flows after node start - write mock NMS update.
+        return createNode(networkMapAddr, -1, defaultFactory, start, legalName, overrideServices)
     }
 
     @Suppress("unused") // This is used from the network visualiser tool.

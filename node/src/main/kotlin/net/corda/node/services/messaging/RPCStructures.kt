@@ -20,6 +20,7 @@ import net.corda.core.crypto.CompositeKey
 import net.corda.core.crypto.DigitalSignature
 import net.corda.core.crypto.Party
 import net.corda.core.crypto.SecureHash
+import net.corda.core.flows.AdvertisedFlow
 import net.corda.core.flows.FlowException
 import net.corda.core.flows.IllegalFlowLogicException
 import net.corda.core.flows.StateMachineRunId
@@ -163,6 +164,7 @@ private class RPCKryo(observableSerializer: Serializer<Observable<Any>>? = null)
         register(Notification.Kind::class.java)
 
         register(ArrayList::class.java)
+        register(Array<String>::class.java)
         register(listOf<Any>().javaClass) // EmptyList
         register(IllegalStateException::class.java)
         register(Pair::class.java)
@@ -200,6 +202,7 @@ private class RPCKryo(observableSerializer: Serializer<Observable<Any>>? = null)
         register(setOf(Unit).javaClass) // SingletonSet
         register(ServiceEntry::class.java)
         register(NodeInfo::class.java)
+        register(AdvertisedFlow::class.java)
         register(PhysicalLocation::class.java)
         register(NetworkMapCache.MapChange.Added::class.java)
         register(NetworkMapCache.MapChange.Removed::class.java)

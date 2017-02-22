@@ -254,8 +254,10 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
             schemas = makeSchemaService()
             vault = makeVaultService()
 
-            identity = makeIdentityService()
+            // legalIdentity and identities of serviceEntries are also used in keyManagementStorage, they were built in nodeInfo before
             val legalIdentity = obtainLegalIdentity()
+            val serviceEntries = makeServiceEntries() // TODO That AbstractNode code is just insane, you almost always end up in circular dependency on everything...
+            identity = makeIdentityService(legalIdentity)
             // Place the long term identity key in the KMS. Eventually, this is likely going to be separated again because
             // the KMS is meant for derived temporary keys used in transactions, and we're not supposed to sign things with
             // the identity key. But the infrastructure to make that easy isn't here yet.
@@ -294,7 +296,7 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
                 }
             }
             buildAdvertisedServices()
-            info = makeInfo(legalIdentity)
+            info = makeInfo(legalIdentity, serviceEntries)
             // TODO: this model might change but for now it provides some de-coupling
             // Add vault observers
             CashBalanceAsMetricsObserver(services, database)
@@ -317,10 +319,9 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
         return this
     }
 
-    private fun makeInfo(legalIdentity: Party): NodeInfo {
+    private fun makeInfo(legalIdentity: Party, advertisedServiceEntries: List<ServiceEntry>): NodeInfo {
         val maybeFlows = inFlowVersions[ServiceType.corda.getSubType("peer_node")]
         val advertisedPeerFlows = maybeFlows ?: emptyList()
-        val advertisedServiceEntries = makeServiceEntries()
         return NodeInfo(net.myAddress, legalIdentity, advertisedServiceEntries, advertisedPeerFlows, findMyLocation())
     }
 
@@ -331,9 +332,9 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
     protected open fun makeServiceEntries(): List<ServiceEntry> {
         // TODO NMS doesn't advertise flows, it's not a problem, because communication goes without session initiation (version discovery is there).
         return advertisedServices.map {
-            // TODO It's hack for now, because there is no correspondence between advertised service in configs  and what actually is kept on node (as plugin, flows, whatever).
+            // TODO It's hack for now, because there is no correspondence between advertised service in configs and what actually is kept on node (as plugin, flows, whatever).
             //  That causes problems even in situation when we would like to version just services/plugins as a whole.
-            val maybeFlows = inFlowVersions[it.type] ?: emptyList()
+            val maybeFlows = inFlowVersions[it.type] ?: emptyList() // Get flows supported by this service.
             val serviceId = it.type.id
             val serviceName = it.name ?: "$serviceId|${configuration.myLegalName}"
             val identity = obtainKeyPair(configuration.baseDirectory, serviceId + "-private-key", serviceId + "-public", serviceName).first
@@ -488,9 +489,9 @@ abstract class AbstractNode(open val configuration: NodeConfiguration,
 
     protected abstract fun makeUniquenessProvider(type: ServiceType): UniquenessProvider
 
-    protected open fun makeIdentityService(): IdentityService {
+    protected open fun makeIdentityService(legalIdentity: Party): IdentityService {
         val service = InMemoryIdentityService()
-        service.registerIdentity(info.legalIdentity)
+        service.registerIdentity(legalIdentity)
         services.networkMapCache.partyNodes.forEach { service.registerIdentity(it.legalIdentity) }
         netMapCache.changed.subscribe { mapChange ->
             // TODO how should we handle network map removal
