@@ -31,15 +31,17 @@ class IssuerFlowTest {
         net = MockNetwork(false, true)
         ledger {
             notaryNode = net.createNotaryNode(null, DUMMY_NOTARY.name)
-            bankOfCordaNode = net.createPartyNode(notaryNode.info.address, BOC.name)
+            bankOfCordaNode = net.createPartyNode(notaryNode.info.address, BOC.name, start = false)
             bankClientNode = net.createPartyNode(notaryNode.info.address, MEGA_CORP.name)
+            bankOfCordaNode.services.registerFlowInitiator(IssuerFlow.IssuerFlowFactory)
+            bankOfCordaNode.start()
 
-            // using default IssueTo Party Reference
+            // Using default IssueTo Party Reference
             val issueToPartyAndRef = bankClientNode.info.legalIdentity.ref(OpaqueBytes.Companion.of(123))
             val (issuer, issuerResult) = runIssuerAndIssueRequester(1000000.DOLLARS, issueToPartyAndRef)
             assertEquals(issuerResult.get(), issuer.get().resultFuture.get())
 
-            // try to issue an amount of a restricted currency
+            // Try to issue an amount of a restricted currency
             assertFailsWith<FlowException> {
                 runIssuerAndIssueRequester(Amount(100000L, currency("BRL")), issueToPartyAndRef).issueRequestResult.getOrThrow()
             }
@@ -54,7 +56,7 @@ class IssuerFlowTest {
 
     private fun runIssuerAndIssueRequester(amount: Amount<Currency>, issueToPartyAndRef: PartyAndReference) : RunResult {
         val resolvedIssuerParty = bankOfCordaNode.services.identityService.partyFromAnonymous(issueToPartyAndRef) ?: throw IllegalStateException()
-        val issuerFuture = bankOfCordaNode.initiateSingleShotFlow(IssuerFlow.IssuanceRequester::class) {
+        val issuerFuture = bankOfCordaNode.initiateSingleShotFlow(IssuerFlow.IssuanceRequester::class) { // TODO rewrite this function, initiator is already registered
             otherParty -> IssuerFlow.Issuer(resolvedIssuerParty)
         }.map { it.stateMachine }
 

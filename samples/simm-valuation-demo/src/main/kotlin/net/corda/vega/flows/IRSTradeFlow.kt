@@ -3,6 +3,7 @@ package net.corda.vega.flows
 import co.paralleluniverse.fibers.Suspendable
 import net.corda.core.crypto.Party
 import net.corda.core.flows.FlowLogic
+import net.corda.core.flows.FlowVersion
 import net.corda.core.node.PluginServiceHub
 import net.corda.core.transactions.SignedTransaction
 import net.corda.core.utilities.unwrap
@@ -14,6 +15,7 @@ import net.corda.vega.contracts.SwapData
 object IRSTradeFlow {
     data class OfferMessage(val notary: Party, val dealBeingOffered: IRSState)
 
+    @FlowVersion("1.0", "IRSTradeFlow", arrayOf("1.0"))
     class Requester(val swap: SwapData, val otherParty: Party) : FlowLogic<SignedTransaction>() {
 
         @Suspendable
@@ -46,6 +48,7 @@ object IRSTradeFlow {
         }
     }
 
+    @FlowVersion("1.0", "IRSTradeFlow", arrayOf("1.0"))
     class Receiver(private val replyToParty: Party) : FlowLogic<Unit>() {
 
         @Suspendable

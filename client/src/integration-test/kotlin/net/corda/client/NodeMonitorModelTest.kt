@@ -104,12 +104,12 @@ class NodeMonitorModelTest : DriverBasedTest() {
             sequence(
                     // SNAPSHOT
                     expect { output: Vault.Update ->
-                        require(output.consumed.size == 0) { output.consumed.size }
-                        require(output.produced.size == 0) { output.produced.size }
+                        require(output.consumed.isEmpty()) { output.consumed.size }
+                        require(output.produced.isEmpty()) { output.produced.size }
                     },
                     // ISSUE
                     expect { output: Vault.Update ->
-                        require(output.consumed.size == 0) { output.consumed.size }
+                        require(output.consumed.isEmpty()) { output.consumed.size }
                         require(output.produced.size == 1) { output.produced.size }
                     }
             )
@@ -183,12 +183,12 @@ class NodeMonitorModelTest : DriverBasedTest() {
             sequence(
                     // SNAPSHOT
                     expect { output: Vault.Update ->
-                        require(output.consumed.size == 0) { output.consumed.size }
-                        require(output.produced.size == 0) { output.produced.size }
+                        require(output.consumed.isEmpty()) { output.consumed.size }
+                        require(output.produced.isEmpty()) { output.produced.size }
                     },
                     // ISSUE
                     expect { update ->
-                        require(update.consumed.size == 0) { update.consumed.size }
+                        require(update.consumed.isEmpty()) { update.consumed.size }
                         require(update.produced.size == 1) { update.produced.size }
                     },
                     // MOVE
