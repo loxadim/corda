@@ -17,6 +17,7 @@ repositories {
 configurations {
     integrationTestCompile.extendsFrom testCompile
     integrationTestRuntime.extendsFrom testRuntime
+    runtimeArtifacts
 }
 
 sourceSets {
@@ -77,4 +78,15 @@ task integrationTest(type: Test) {
 publish {
     name = 'corda-webserver'
     publishWar = true
+}
+
+war {
+    baseName = 'corda-webserver'
+    manifest {
+        attributes('Corda-Version': corda_version)
+    }
+}
+
+artifacts {
+    runtimeArtifacts war
 }
