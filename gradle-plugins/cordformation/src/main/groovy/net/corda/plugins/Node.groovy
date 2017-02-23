@@ -110,7 +110,7 @@ class Node {
     /**
      * Set the network map address for this node.
      *
-     * @jarning This should not be directly set unless you know what you are doing. Use the networkMapName in the
+     * @warning This should not be directly set unless you know what you are doing. Use the networkMapName in the
      *          Cordform task instead.
      * @param networkMapAddress Network map node address.
      * @param networkMapLegalName Network map node legal name.
