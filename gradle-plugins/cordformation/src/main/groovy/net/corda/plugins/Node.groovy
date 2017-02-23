@@ -9,7 +9,7 @@ import java.nio.file.Files
  * Represents a node that will be installed.
  */
 class Node {
-    static final String JAR_NAME = 'corda.jar'
+    static final String NODEJAR_NAME = 'corda.jar'
     static final String WEBJAR_NAME = 'corda-webserver.jar'
     static final String DEFAULT_HOST = 'localhost'
 
@@ -161,7 +161,7 @@ class Node {
         project.copy {
             from cordaJar
             into nodeDir
-            rename cordaJar.name, JAR_NAME
+            rename cordaJar.name, NODEJAR_NAME
         }
     }
 
