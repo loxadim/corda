@@ -4,7 +4,7 @@ import java.lang.annotation.Inherited
 import java.util.*
 import net.corda.core.crypto.Party
 
-val versionRegex = Regex("^(\\d+\\.\\d*)$") // Format: Major.Minor
+val versionRegex = Regex("^(\\d+\\.\\d+)$") // Format: Major.Minor
 
 //TODO Do want to have inherited annotation of sublcasses? It makes life easier when testing + defaults, but it's hard to debug when you don't annotate your flow.
 /**
