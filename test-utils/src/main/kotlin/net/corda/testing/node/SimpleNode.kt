@@ -5,6 +5,7 @@ import com.google.common.util.concurrent.SettableFuture
 import net.corda.core.crypto.composite
 import net.corda.core.crypto.generateKeyPair
 import net.corda.core.messaging.RPCOps
+import net.corda.core.node.Version
 import net.corda.node.services.RPCUserServiceImpl
 import net.corda.node.services.config.NodeConfiguration
 import net.corda.node.services.messaging.ArtemisMessagingServer
@@ -35,6 +36,7 @@ class SimpleNode(val config: NodeConfiguration, val address: HostAndPort = freeL
     val net = databaseTransaction(database) {
         NodeMessagingClient(
                 config,
+                Version(0, 0, false),
                 address,
                 identity.public.composite,
                 executor,

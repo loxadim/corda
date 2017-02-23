@@ -1,9 +1,11 @@
 @file:JvmName("Corda")
 package net.corda.node
 
+import com.jcabi.manifests.Manifests
 import com.typesafe.config.ConfigException
 import joptsimple.OptionException
 import net.corda.core.*
+import net.corda.core.node.Version
 import net.corda.core.utilities.Emoji
 import net.corda.node.internal.Node
 import net.corda.node.services.config.FullNodeConfiguration
@@ -36,6 +38,13 @@ fun main(args: Array<String>) {
     val startTime = System.currentTimeMillis()
     checkJavaVersion()
 
+    val (version, revision) = if (Manifests.exists("Corda-Version")) {
+        Version.parse(Manifests.read("Corda-Version")) to Manifests.read("Corda-Revision")
+    } else {
+        // This property is set during the build process and isn't available when running from an IDE
+        Version(0, 0, false) to "~Git revision unavailable~"
+    }
+
     val argsParser = ArgsParser()
 
     val cmdlineOptions = try {
@@ -44,6 +53,12 @@ fun main(args: Array<String>) {
         println("Invalid command line arguments: ${ex.message}")
         argsParser.printHelp(System.out)
         exitProcess(1)
+    }
+
+    if (cmdlineOptions.isVersion) {
+        println("Corda $version")
+        println("Revision $revision")
+        exitProcess(0)
     }
 
     // Maybe render command line help.
@@ -59,7 +74,7 @@ fun main(args: Array<String>) {
         renderBasicInfoToConsole = false
     }
 
-    drawBanner()
+    drawBanner(version)
 
     val logDir = if (cmdlineOptions.isWebserver) "logs/web" else "logs"
     System.setProperty("log-path", (cmdlineOptions.baseDirectory / logDir).toString())
@@ -105,7 +120,7 @@ fun main(args: Array<String>) {
 
         // TODO: Webserver should be split and start from inside a WAR container
         if (!cmdlineOptions.isWebserver) {
-            val node = conf.createNode()
+            val node = conf.createNode(version)
             node.start()
             printPluginsAndServices(node)
 
@@ -131,6 +146,7 @@ fun main(args: Array<String>) {
         log.error("Exception during node startup", e)
         exitProcess(1)
     }
+
     exitProcess(0)
 }
 
@@ -169,13 +185,12 @@ private fun messageOfTheDay(): Pair<String, String> {
             "Computer science and finance together.\nYou should see our crazy Christmas parties!"
     )
     if (Emoji.hasEmojiTerminal)
-        messages +=
-            "Kind of like a regular database but\nwith emojis, colours and ascii art. ${Emoji.coolGuy}"
+        messages += "Kind of like a regular database but\nwith emojis, colours and ascii art. ${Emoji.coolGuy}"
     val (a, b) = messages.randomOrNull()!!.split('\n')
     return Pair(a, b)
 }
 
-private fun drawBanner() {
+private fun drawBanner(version: Version) {
     // This line makes sure ANSI escapes work on Windows, where they aren't supported out of the box.
     AnsiConsole.systemInstall()
 
@@ -188,5 +203,5 @@ private fun drawBanner() {
  / /     __  / ___/ __  / __ `/         """).fgBrightBlue().a(msg1).newline().fgBrightRed().a(
 "/ /___  /_/ / /  / /_/ / /_/ /          ").fgBrightBlue().a(msg2).newline().fgBrightRed().a(
 """\____/     /_/   \__,_/\__,_/""").reset().newline().newline().fgBrightDefault().bold().
-a("--- DEVELOPER SNAPSHOT ------------------------------------------------------------").newline().reset())
+a("--- Version $version -----------------------------------------------------").newline().reset())
 }

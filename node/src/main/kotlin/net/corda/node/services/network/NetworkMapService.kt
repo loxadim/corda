@@ -115,8 +115,7 @@ class InMemoryNetworkMapService(services: ServiceHubInternal) : AbstractNetworkM
  * subscriber clean up and is simpler to persist than the previous implementation based on a set of missing messages acks.
  */
 @ThreadSafe
-abstract class AbstractNetworkMapService
-(services: ServiceHubInternal) : NetworkMapService, AbstractNodeService(services) {
+abstract class AbstractNetworkMapService(services: ServiceHubInternal) : NetworkMapService, AbstractNodeService(services) {
     protected abstract val registeredNodes: MutableMap<Party, NodeRegistrationInfo>
 
     // Map from subscriber address, to most recently acknowledged update map version.

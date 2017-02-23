@@ -10,6 +10,7 @@ import net.corda.core.crypto.generateKeyPair
 import net.corda.core.messaging.Message
 import net.corda.core.messaging.RPCOps
 import net.corda.core.messaging.createMessage
+import net.corda.core.node.Version
 import net.corda.core.node.services.DEFAULT_SESSION_ID
 import net.corda.core.utilities.LogHelper
 import net.corda.node.services.RPCUserService
@@ -219,6 +220,7 @@ class ArtemisMessagingTests {
         return databaseTransaction(database) {
             NodeMessagingClient(
                     config,
+                    Version(0, 0, false),
                     server,
                     identity.public.composite,
                     ServiceAffinityExecutor("ArtemisMessagingTests", 1),

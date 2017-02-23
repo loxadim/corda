@@ -6,6 +6,7 @@ import net.corda.core.createDirectories
 import net.corda.core.div
 import net.corda.core.flatMap
 import net.corda.core.map
+import net.corda.core.node.Version
 import net.corda.core.node.services.ServiceInfo
 import net.corda.core.node.services.ServiceType
 import net.corda.node.internal.Node
@@ -132,7 +133,7 @@ abstract class NodeBasedTest {
                 ) + configOverrides
         )
 
-        val node = FullNodeConfiguration(baseDirectory, config).createNode()
+        val node = FullNodeConfiguration(baseDirectory, config).createNode(Version(1, 0, false))
         node.start()
         nodes += node
         thread(name = legalName) {

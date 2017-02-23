@@ -2,9 +2,13 @@ package net.corda.services.messaging
 
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.support.jdk7.use
-import net.corda.core.*
 import net.corda.core.crypto.Party
+import net.corda.core.div
+import net.corda.core.getOrThrow
 import net.corda.core.node.NodeInfo
+import net.corda.core.node.Version
+import net.corda.core.random63BitValue
+import net.corda.core.seconds
 import net.corda.flows.sendRequest
 import net.corda.node.internal.NetworkMapInfo
 import net.corda.node.services.config.configureWithDevSSLCertificate
@@ -60,7 +64,7 @@ class P2PSecurityTest : NodeBasedTest() {
     }
 
     private fun SimpleNode.registerWithNetworkMap(registrationName: String): ListenableFuture<NetworkMapService.RegistrationResponse> {
-        val nodeInfo = NodeInfo(net.myAddress, Party(registrationName, identity.public))
+        val nodeInfo = NodeInfo(net.myAddress, Party(registrationName, identity.public), Version(1, 0, false))
         val registration = NodeRegistration(nodeInfo, System.currentTimeMillis(), AddOrRemove.ADD, Instant.MAX)
         val request = RegistrationRequest(registration.toWire(identity.private), net.myAddress)
         return net.sendRequest<NetworkMapService.RegistrationResponse>(REGISTER_FLOW_TOPIC, request, networkMapNode.net.myAddress)

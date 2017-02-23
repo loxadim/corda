@@ -21,7 +21,8 @@ class ArgsParserTest {
                 logToConsole = false,
                 loggingLevel = Level.INFO,
                 isWebserver = false,
-                isRegistration = false))
+                isRegistration = false,
+                isVersion = false))
     }
 
     @Test
@@ -56,26 +57,6 @@ class ArgsParserTest {
     }
 
     @Test
-    fun `log-to-console`() {
-        val cmdLineOptions = parser.parse("--log-to-console")
-        assertThat(cmdLineOptions.logToConsole).isTrue()
-    }
-
-    @Test
-    fun `logging-level`() {
-        for (level in Level.values()) {
-            val cmdLineOptions = parser.parse("--logging-level", level.name)
-            assertThat(cmdLineOptions.loggingLevel).isEqualTo(level)
-        }
-    }
-
-    @Test
-    fun `webserver`() {
-        val cmdLineOptions = parser.parse("--webserver")
-        assertThat(cmdLineOptions.isWebserver).isTrue()
-    }
-
-    @Test
     fun `both base-directory and config-file`() {
         assertThatExceptionOfType(IllegalArgumentException::class.java).isThrownBy {
             parser.parse("--base-directory", "base", "--config-file", "conf")
@@ -97,6 +78,20 @@ class ArgsParserTest {
     }
 
     @Test
+    fun `log-to-console`() {
+        val cmdLineOptions = parser.parse("--log-to-console")
+        assertThat(cmdLineOptions.logToConsole).isTrue()
+    }
+
+    @Test
+    fun `logging-level`() {
+        for (level in Level.values()) {
+            val cmdLineOptions = parser.parse("--logging-level", level.name)
+            assertThat(cmdLineOptions.loggingLevel).isEqualTo(level)
+        }
+    }
+
+    @Test
     fun `logging-level without argument`() {
         assertThatExceptionOfType(OptionException::class.java).isThrownBy {
             parser.parse("--logging-level")
@@ -108,5 +103,23 @@ class ArgsParserTest {
         assertThatExceptionOfType(OptionException::class.java).isThrownBy {
             parser.parse("--logging-level", "not-a-level")
         }.withMessageContaining("logging-level")
+    }
+
+    @Test
+    fun webserver() {
+        val cmdLineOptions = parser.parse("--webserver")
+        assertThat(cmdLineOptions.isWebserver).isTrue()
+    }
+
+    @Test
+    fun `initial-registration`() {
+        val cmdLineOptions = parser.parse("--initial-registration")
+        assertThat(cmdLineOptions.isRegistration).isTrue()
+    }
+
+    @Test
+    fun version() {
+        val cmdLineOptions = parser.parse("--version")
+        assertThat(cmdLineOptions.isVersion).isTrue()
     }
 }

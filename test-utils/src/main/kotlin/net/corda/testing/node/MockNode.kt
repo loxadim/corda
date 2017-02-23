@@ -12,6 +12,7 @@ import net.corda.core.messaging.SingleMessageRecipient
 import net.corda.core.node.CordaPluginRegistry
 import net.corda.core.node.PhysicalLocation
 import net.corda.core.node.ServiceEntry
+import net.corda.core.node.Version
 import net.corda.core.node.services.*
 import net.corda.core.utilities.DUMMY_NOTARY_KEY
 import net.corda.core.utilities.loggerFor
@@ -129,7 +130,8 @@ class MockNetwork(private val networkSendManuallyPumped: Boolean = false,
                         advertisedServices: Set<ServiceInfo>,
                         val id: Int,
                         val overrideServices: Map<ServiceInfo, KeyPair>?,
-                        val entropyRoot: BigInteger = BigInteger.valueOf(random63BitValue())) : AbstractNode(config, advertisedServices, TestClock(), mockNet.busyLatch) {
+                        val entropyRoot: BigInteger = BigInteger.valueOf(random63BitValue())) :
+            AbstractNode(config, advertisedServices, Version(0, 1, false), TestClock(), mockNet.busyLatch) {
         var counter = entropyRoot
         override val log: Logger = loggerFor<MockNode>()
         override val serverThread: AffinityExecutor =

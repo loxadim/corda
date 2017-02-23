@@ -4,11 +4,10 @@ import com.codahale.metrics.JmxReporter
 import com.google.common.net.HostAndPort
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
-import net.corda.core.div
-import net.corda.core.flatMap
-import net.corda.core.getOrThrow
+import net.corda.core.*
 import net.corda.core.messaging.RPCOps
 import net.corda.core.node.ServiceHub
+import net.corda.core.node.Version
 import net.corda.core.node.services.ServiceInfo
 import net.corda.core.node.services.ServiceType
 import net.corda.core.node.services.UniquenessProvider
@@ -22,19 +21,14 @@ import net.corda.node.services.config.FullNodeConfiguration
 import net.corda.node.services.messaging.ArtemisMessagingComponent.NetworkMapAddress
 import net.corda.node.services.messaging.ArtemisMessagingServer
 import net.corda.node.services.messaging.NodeMessagingClient
-import net.corda.node.services.transactions.PersistentUniquenessProvider
-import net.corda.node.services.transactions.RaftUniquenessProvider
-import net.corda.node.services.transactions.RaftValidatingNotaryService
-import net.corda.node.services.transactions.BFTSmartUniquenessProvider
-import net.corda.node.services.transactions.BFTValidatingNotaryService
+import net.corda.node.services.transactions.*
 import net.corda.node.utilities.AffinityExecutor
 import net.corda.node.utilities.databaseTransaction
 import org.jetbrains.exposed.sql.Database
+import org.slf4j.Logger
 import java.io.RandomAccessFile
 import java.lang.management.ManagementFactory
 import java.nio.channels.FileLock
-import java.nio.file.Files
-import java.nio.file.Paths
 import java.time.Clock
 import javax.management.ObjectName
 import javax.servlet.*
@@ -51,8 +45,13 @@ import kotlin.concurrent.thread
  */
 class Node(override val configuration: FullNodeConfiguration,
            advertisedServices: Set<ServiceInfo>,
-           clock: Clock = NodeClock()) : AbstractNode(configuration, advertisedServices, clock) {
-    override val log = loggerFor<Node>()
+           version: Version,
+           clock: Clock = NodeClock()) : AbstractNode(configuration, advertisedServices, version, clock) {
+    companion object {
+        private val logger = loggerFor<Node>()
+    }
+
+    override val log: Logger get() = logger
     override val networkMapAddress: NetworkMapAddress? get() = configuration.networkMapService?.address?.let(::NetworkMapAddress)
 
     // DISCUSSION
@@ -109,20 +108,18 @@ class Node(override val configuration: FullNodeConfiguration,
     }
 
     /**
-     * Abort starting the node if an existing deployment with a different version is detected in the current directory.
-     * The current version is expected to be specified as a system property. If not provided, the check will be ignored.
+     * Abort starting the node if an existing deployment with a different version is detected in the base directory.
      */
     private fun checkVersionUnchanged() {
-        val currentVersion = System.getProperty("corda.version") ?: return
-        val versionFile = Paths.get("version")
-        if (Files.exists(versionFile)) {
-            val existingVersion = Files.readAllLines(versionFile)[0]
-            check(existingVersion == currentVersion) {
-                "Version change detected - current: $currentVersion, existing: $existingVersion. Node upgrades are not yet supported."
+        val versionFile = configuration.baseDirectory / "version"
+        if (versionFile.exists()) {
+            val previousVersion = Version.parse(versionFile.readAllLines()[0])
+            check(version.major == previousVersion.major) {
+                "Major version change detected - current: $version, previous: $previousVersion. " +
+                        "Node upgrades across major versions are not yet supported."
             }
-        } else {
-            Files.write(versionFile, currentVersion.toByteArray())
         }
+        versionFile.writeLines(listOf(version.toString()))
     }
 
     override fun makeMessagingService(): MessagingServiceInternal {
@@ -135,7 +132,7 @@ class Node(override val configuration: FullNodeConfiguration,
             }()
         }
         val myIdentityOrNullIfNetworkMapService = if (networkMapAddress != null) obtainLegalIdentity().owningKey else null
-        return NodeMessagingClient(configuration, serverAddress, myIdentityOrNullIfNetworkMapService, serverThread, database,
+        return NodeMessagingClient(configuration, version, serverAddress, myIdentityOrNullIfNetworkMapService, serverThread, database,
                 networkMapRegistrationFuture)
     }
 
